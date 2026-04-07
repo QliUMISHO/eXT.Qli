@@ -1,7 +1,5 @@
 # eXT.Qli
-sophos bootleg crap fuckass shit
-
-EDIT: clonable via git clone. smh 
+remote administration tool for totally legal use
 
 UPDATE 3/17/26:
 
@@ -9,4 +7,8 @@ UPDATE 3/17/26:
 
 UPDATE 4/1/26:
 
-• this fucking shit turned into an agent managing system magically 
+• this fucking shit turned into an agent managing system magically (abandoned sophos type shit) 
+
+UPDATE 4/7/26: 
+
+• working remote access without permission. receives mouse and keyboard input
