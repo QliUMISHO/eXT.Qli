@@ -37,7 +37,15 @@ type WSMessage struct {
 	Width           int             `json:"width,omitempty"`
 	Height          int             `json:"height,omitempty"`
 	Seq             int64           `json:"seq,omitempty"`
-	Data            json.RawMessage `json:"data,omitempty"`
+	// Remote control fields
+	EventType string `json:"event_type,omitempty"`
+	X         int    `json:"x,omitempty"`
+	Y         int    `json:"y,omitempty"`
+	Button    string `json:"button,omitempty"`
+	Pressed   bool   `json:"pressed,omitempty"`
+	Delta     int    `json:"delta,omitempty"`
+	Key       string `json:"key,omitempty"`
+	Data      json.RawMessage `json:"data,omitempty"`
 }
 
 var upgrader = websocket.Upgrader{
@@ -353,6 +361,26 @@ func handleWS(w http.ResponseWriter, r *http.Request) {
 			relayScreenStatus(msg, client)
 		case "task_result":
 			notifyAllViewers(msg)
+		case "input_event":
+			// Forward input events from viewer to agent
+			log.Printf("Forwarding input_event to agent %s", msg.TargetAgentUUID)
+			targetAgent := msg.TargetAgentUUID
+			if targetAgent == "" {
+				log.Printf("input_event missing target_agent_uuid")
+				continue
+			}
+			agent := getAgent(targetAgent)
+			if agent != nil {
+				// Remove target_agent_uuid to avoid confusion on agent side
+				msg.TargetAgentUUID = ""
+				if err := agent.writeJSON(msg); err != nil {
+					log.Printf("Failed to send input_event to agent %s: %v", targetAgent, err)
+				} else {
+					log.Printf("Successfully forwarded input_event to agent %s", targetAgent)
+				}
+			} else {
+				log.Printf("Agent %s not connected", targetAgent)
+			}
 		}
 	}
 }

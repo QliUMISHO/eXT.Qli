@@ -130,6 +130,26 @@
         border-color: rgba(146, 179, 255, .28);
     }
 
+    /* Fullscreen mode */
+    .screen-stage:fullscreen {
+        width: 100vw;
+        height: 100vh;
+        border-radius: 0;
+        background: black;
+    }
+    .screen-stage:-webkit-full-screen {
+        width: 100vw;
+        height: 100vh;
+        border-radius: 0;
+        background: black;
+    }
+    .screen-stage:-moz-full-screen {
+        width: 100vw;
+        height: 100vh;
+        border-radius: 0;
+        background: black;
+    }
+
     #remoteScreenVideo {
         width: 100%;
         height: 100%;
@@ -352,7 +372,7 @@
                                         <div class="table-wrap">
                                             <table class="agents-table">
                                                 <thead>
-                                                     <tr>
+                                                    <tr>
                                                         <th>IP</th>
                                                         <th>Hostname</th>
                                                         <th>MAC</th>
@@ -360,12 +380,12 @@
                                                         <th>Status</th>
                                                         <th>Last Seen</th>
                                                         <th>Actions</th>
-                                                     </tr>
+                                                    </tr>
                                                 </thead>
                                                 <tbody id="devicesTableBody">
-                                                     <tr>
+                                                    <tr>
                                                         <td colspan="7">No saved devices yet.</td>
-                                                     </tr>
+                                                    </tr>
                                                 </tbody>
                                             </table>
                                         </div>
@@ -383,17 +403,21 @@
                                                     <label for="screenAgentSelect">Agent</label>
                                                     <select id="screenAgentSelect" class="field-select"></select>
                                                 </div>
-
                                                 <div class="field">
                                                     <label>Action</label>
                                                     <div class="button-row">
                                                         <button type="button" id="startScreenViewBtn" class="btn btn-primary">Start Viewing</button>
                                                         <button type="button" id="stopScreenViewBtn" class="btn btn-dark">Stop Viewing</button>
                                                         <button type="button" id="refreshViewerAgentsBtn" class="btn btn-accent">Refresh Agents</button>
+                                                        <button type="button" id="fullscreenBtn" class="btn btn-accent">⛶ Full Screen</button>
                                                     </div>
                                                 </div>
                                             </div>
-
+                                            <div class="button-row" style="margin-top: 12px;">
+                                                <label style="display: flex; align-items: center; gap: 8px;">
+                                                    <input type="checkbox" id="remoteControlToggle"> Enable Remote Control (Mouse/Keyboard)
+                                                </label>
+                                            </div>
                                             <div id="screenStatusBar" class="status-bar">
                                                 Waiting for a selected agent.
                                             </div>
@@ -403,8 +427,9 @@
                                     <section class="panel">
                                         <div class="panel-header">Remote Screen</div>
                                         <div class="panel-body">
-                                            <div id="screenStage" class="screen-stage is-empty">
-                                                <img id="remoteScreenVideo" alt="Remote screen stream" draggable="false">
+                                            <div id="screenStage" class="screen-stage is-empty" style="position: relative;">
+                                                <img id="remoteScreenVideo" alt="Remote screen stream" draggable="false" style="position: absolute; top:0; left:0; width:100%; height:100%; object-fit: contain;">
+                                                <canvas id="remoteControlOverlay" style="position: absolute; top:0; left:0; width:100%; height:100%; z-index:10; cursor: crosshair; display: none;"></canvas>
                                                 <div id="screenEmptyState" class="screen-empty-state">
                                                     No remote screen stream yet.
                                                 </div>
