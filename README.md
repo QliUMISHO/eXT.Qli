@@ -1,5 +1,6 @@
 # eXT.Qli
-remote administration tool for totally legal use
+remote administration tool for totally legal use in small scale organizations. used to manage PCs in an efficient way.  
+written in Python, PHP, JS, and GO (might be replaced with Python too).
 
 UPDATE 3/17/26:
 
