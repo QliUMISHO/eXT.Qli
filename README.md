@@ -2,6 +2,8 @@
 remote administration tool for totally legal use in small scale organizations. used to manage PCs in an efficient way.  
 written in Python, PHP, JS, and GO (might be replaced with Python too).
 
+WILL BE MADE IN 2 TYPES, WEBSOCKET WITH SERVER-SIDE BROKER AND WEBRTC
+
 UPDATE 3/17/26:
 
 • uses nmap for scanning ports 
