@@ -14,4 +14,8 @@ UPDATE 4/1/26:
 
 UPDATE 4/7/26: 
 
-• working remote access without permission. receives mouse and keyboard input
+• working remote access without permission. receives mouse and keyboard input (websocket)
+
+UPDATE 4/14/26: 
+
+• working remote access without permission. receives mouse and keyboard input (WebRTC). 
