@@ -1,7 +1,13 @@
 <?php
 /**
- * HTTP signaling endpoint – stores offers and answers only.
- * No ICE candidate splitting – we rely on SDP with bundled candidates.
+ * HTTP signaling endpoint for WebRTC.
+ * Actions:
+ * - POST ?action=submit_offer&agent_uuid=XXX
+ * - GET  ?action=poll_offer&agent_uuid=XXX
+ * - POST ?action=submit_answer&viewer_id=XXX
+ * - GET  ?action=poll_answer&viewer_id=XXX
+ * - POST ?action=ice_candidate (with target, candidate, etc.)
+ * - GET  ?action=poll_ice_candidates&target=XXX
  */
 
 header('Content-Type: application/json');
@@ -21,7 +27,7 @@ $action = $_GET['action'] ?? '';
 $agentUuid = $_GET['agent_uuid'] ?? '';
 $viewerId = $_GET['viewer_id'] ?? '';
 
-// ---------- Viewer submits offer ----------
+// ---------- Submit offer (from viewer) ----------
 if ($action === 'submit_offer') {
     $input = json_decode(file_get_contents('php://input'), true);
     if (!$agentUuid || empty($input['offer_sdp']) || empty($input['viewer_id'])) {
@@ -37,7 +43,7 @@ if ($action === 'submit_offer') {
     jsonResponse(['success' => true, 'message' => 'Offer stored']);
 }
 
-// ---------- Agent polls for offer ----------
+// ---------- Poll offer (by agent) ----------
 if ($action === 'poll_offer') {
     if (!$agentUuid) {
         jsonResponse(['success' => false, 'message' => 'Missing agent_uuid'], 400);
@@ -56,7 +62,7 @@ if ($action === 'poll_offer') {
     }
 }
 
-// ---------- Agent submits answer ----------
+// ---------- Submit answer (from agent) ----------
 if ($action === 'submit_answer') {
     $input = json_decode(file_get_contents('php://input'), true);
     $viewerId = $input['viewer_id'] ?? '';
@@ -71,7 +77,7 @@ if ($action === 'submit_answer') {
     jsonResponse(['success' => true, 'message' => 'Answer stored']);
 }
 
-// ---------- Viewer polls for answer ----------
+// ---------- Poll answer (by viewer) ----------
 if ($action === 'poll_answer') {
     if (!$viewerId) {
         jsonResponse(['success' => false, 'message' => 'Missing viewer_id'], 400);
@@ -86,6 +92,44 @@ if ($action === 'poll_answer') {
         ]);
     } else {
         jsonResponse(['has_answer' => false]);
+    }
+}
+
+// ---------- ICE candidate forwarding (optional) ----------
+if ($action === 'ice_candidate') {
+    $input = json_decode(file_get_contents('php://input'), true);
+    $target = $input['target'] ?? ($input['agent_uuid'] ?? $input['viewer_id'] ?? '');
+    if (!$target || empty($input['candidate'])) {
+        jsonResponse(['success' => false, 'message' => 'Missing target or candidate'], 400);
+    }
+    $candidateFile = $dataDir . '/' . $target . '.ice.json';
+    $candidates = [];
+    if (file_exists($candidateFile)) {
+        $candidates = json_decode(file_get_contents($candidateFile), true) ?: [];
+    }
+    $candidates[] = [
+        'candidate' => $input['candidate'],
+        'sdp_mid' => $input['sdp_mid'] ?? '',
+        'sdp_mline_index' => $input['sdp_mline_index'] ?? 0,
+        'timestamp' => time()
+    ];
+    file_put_contents($candidateFile, json_encode($candidates));
+    jsonResponse(['success' => true, 'message' => 'ICE candidate stored']);
+}
+
+// ---------- Poll ICE candidates (by agent or viewer) ----------
+if ($action === 'poll_ice_candidates') {
+    $target = $_GET['target'] ?? '';
+    if (!$target) {
+        jsonResponse(['success' => false, 'message' => 'Missing target'], 400);
+    }
+    $candidateFile = $dataDir . '/' . $target . '.ice.json';
+    if (file_exists($candidateFile)) {
+        $candidates = json_decode(file_get_contents($candidateFile), true) ?: [];
+        unlink($candidateFile);
+        jsonResponse(['has_candidates' => true, 'candidates' => $candidates]);
+    } else {
+        jsonResponse(['has_candidates' => false]);
     }
 }
 

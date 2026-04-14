@@ -9,15 +9,24 @@ eXT.Qli Environment Installer (No Admin Required)
 import os
 import sys
 import subprocess
-import platform
 import tempfile
-import shutil
 import zipfile
 from pathlib import Path
 
 # ========== CONFIGURATION ==========
 BUNDLED_PYTHON_ZIP = "python-3.11.9-embed-amd64.zip"
-REQUIRED_PIP_PACKAGES = ["pyautogui", "pynput", "opencv-python"]
+
+# Full WebRTC agent dependencies
+REQUIRED_PIP_PACKAGES = [
+    "aiortc",           # WebRTC implementation
+    "mss",              # Fast screen capture
+    "numpy",            # Array handling for video frames
+    "av",               # Video encoding (required by aiortc)
+    "Pillow",           # JPEG compression for data-channel fallback
+    "pyautogui",        # Remote control mouse/keyboard simulation
+    "pynput",           # Keylogger support
+    "opencv-python",    # Webcam capture
+]
 # ===================================
 
 def resource_path(relative_path):
@@ -67,6 +76,17 @@ def install_python_from_bundle():
         print("[!] python.exe not found after extraction.")
         sys.exit(1)
 
+    # Enable pip in embedded Python (uncomment import site in python._pth)
+    pth_file = os.path.join(target_dir, 'python._pth')
+    if os.path.exists(pth_file):
+        with open(pth_file, 'r') as f:
+            content = f.read()
+        if '#import site' in content:
+            content = content.replace('#import site', 'import site')
+            with open(pth_file, 'w') as f:
+                f.write(content)
+            print("    Enabled site-packages in embedded Python.")
+
     print("    ...done.")
     return python_exe
 
@@ -83,8 +103,7 @@ def ensure_pip(python_exe):
         get_pip_path = os.path.join(tempfile.gettempdir(), "get-pip.py")
         import urllib.request
         urllib.request.urlretrieve(get_pip_url, get_pip_path)
-        # Install pip locally without touching system
-        run_cmd(f'"{python_exe}" {get_pip_path} --user', shell=True)
+        run_cmd(f'"{python_exe}" {get_pip_path} --no-warn-script-location', shell=True)
         os.remove(get_pip_path)
         print("    pip installed.")
 
@@ -92,13 +111,18 @@ def install_pip_packages(python_exe):
     print("\n[+] Installing required Python packages...")
     for pkg in REQUIRED_PIP_PACKAGES:
         print(f"    Installing {pkg}...")
-        run_cmd(f'"{python_exe}" -m pip install --user {pkg}', shell=True)
+        # Use --user to avoid permission issues, though embedded Python already user-local
+        run_cmd(f'"{python_exe}" -m pip install --user --no-warn-script-location {pkg}', shell=True)
         print(f"    ...done.")
     print("\n[+] All packages installed successfully.")
 
 def main():
     print("=== eXT.Qli Environment Installer ===\n")
-    print("This tool installs required packages to setup the necessary environment for the eXT.Qli agent file to work.\n")
+    print("This tool installs Python and all required packages for the eXT.Qli agent.")
+    print("Packages to be installed:")
+    for pkg in REQUIRED_PIP_PACKAGES:
+        print(f"  - {pkg}")
+    print()
 
     # 1. Install Python (always from bundle to ensure consistency)
     python_exe = install_python_from_bundle()
@@ -111,7 +135,10 @@ def main():
 
     print("\n[+] Setup complete. The environment is ready for the eXT.Qli agent.")
     print(f"[+] Python location: {python_exe}")
-    print("    Press any key to exit...")
+    print("\n[!] Note: The 'av' package may require the Visual C++ Redistributable.")
+    print("    If you encounter DLL load errors, download and install:")
+    print("    https://aka.ms/vs/17/release/vc_redist.x64.exe")
+    print("\n    Press any key to exit...")
     input()
     sys.exit(0)
 

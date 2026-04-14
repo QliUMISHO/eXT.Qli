@@ -428,7 +428,14 @@
                                         <div class="panel-header">Remote Screen</div>
                                         <div class="panel-body">
                                             <div id="screenStage" class="screen-stage is-empty" style="position: relative;">
-                                                <img id="remoteScreenVideo" alt="Remote screen stream" draggable="false" style="position: absolute; top:0; left:0; width:100%; height:100%; object-fit: contain;">
+                                                <video
+                                                    id="remoteScreenVideo"
+                                                    autoplay
+                                                    playsinline
+                                                    muted
+                                                    draggable="false"
+                                                    style="position: absolute; top:0; left:0; width:100%; height:100%; object-fit: contain; background:#000;"
+                                                ></video>
                                                 <canvas id="remoteControlOverlay" style="position: absolute; top:0; left:0; width:100%; height:100%; z-index:10; cursor: crosshair; display: none;"></canvas>
                                                 <div id="screenEmptyState" class="screen-empty-state">
                                                     No remote screen stream yet.
