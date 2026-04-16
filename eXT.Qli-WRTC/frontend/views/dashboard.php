@@ -222,7 +222,7 @@
         <header class="topbar">
             <div class="brand-wrap">
                 <div class="brand-title">eXT.Qli</div>
-                <div class="brand-subtitle">Network Computer Scanner and Inventory</div>
+                <div class="brand-subtitle">Endpoint EXecution Terminal</div>
             </div>
         </header>
 

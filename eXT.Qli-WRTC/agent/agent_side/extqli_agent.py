@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
 eXT.Qli Windows/Linux agent with WebRTC screen streaming and remote control.
-Uses HTTP signaling (no WebSocket) and a persistent WebRTC data channel for tasks.
-TURN server configured.
+Supports multiple concurrent viewers.
 """
 
 from __future__ import annotations
@@ -14,6 +13,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import secrets
 import shutil
 import socket
@@ -55,8 +55,13 @@ except ImportError:
 try:
     import pyautogui
     PYAUTOGUI_AVAILABLE = True
+    pyautogui.PAUSE = 0
+    pyautogui.FAILSAFE = False
 except ImportError:
     PYAUTOGUI_AVAILABLE = False
+
+import concurrent.futures
+_input_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
 # =========================
 # Configuration
@@ -73,6 +78,11 @@ HEARTBEAT_INTERVAL_SECONDS = 30
 SIGNALING_POLL_INTERVAL_SECONDS = 5
 HTTP_TIMEOUT_SECONDS = 10
 
+STREAM_CONFIG = {
+    "frame_rate":       30,
+    "max_bitrate_kbps": 8000,
+}
+
 STATE_FILE = Path(__file__).resolve().with_name("agent_state.json")
 LOG_PREFIX = "[eXT.Qli Agent]"
 
@@ -88,12 +98,12 @@ TCP_SERVER_STOP_EVENT = threading.Event()
 TCP_SERVER_SOCKET: Optional[socket.socket] = None
 TCP_SERVER_PORT: int = 0
 
-# WebRTC globals
-webrtc_peer: Optional[RTCPeerConnection] = None
-webrtc_data_channel: Optional[Any] = None
+# WebRTC globals - support multiple concurrent viewers
+webrtc_peers: Dict[str, RTCPeerConnection] = {}
+webrtc_data_channels: Dict[str, Any] = {}
 webrtc_loop: Optional[asyncio.AbstractEventLoop] = None
-webrtc_connection_ready = threading.Event()
 signaling_stop_event = threading.Event()
+screen_tracks: Dict[str, Any] = {}  # viewer_id -> track
 
 # =========================
 # Logging helpers
@@ -265,20 +275,18 @@ def get_wazuh_status() -> str:
             continue
     return "unknown"
 
-# FIX #4: report the agent's actual primary monitor resolution so the browser
-# can scale remote-control mouse coordinates correctly.
 def get_screen_resolution() -> Tuple[int, int]:
     try:
         import mss as _mss
         with _mss.mss() as sct:
-            monitor = sct.monitors[1]  # monitors[0] is the combined virtual screen
+            monitor = sct.monitors[1]
             return int(monitor["width"]), int(monitor["height"])
     except Exception:
         return 0, 0
 
 def collect_system_info(extended: bool = False) -> Dict[str, Any]:
     total_gb, free_gb = get_disk_stats()
-    screen_w, screen_h = get_screen_resolution()  # FIX #4
+    screen_w, screen_h = get_screen_resolution()
     info = {
         "agent_uuid": AGENT_UUID,
         "agent_token": AGENT_TOKEN,
@@ -294,8 +302,8 @@ def collect_system_info(extended: bool = False) -> Dict[str, Any]:
         "disk_free_gb": free_gb,
         "uptime_seconds": get_uptime_seconds(),
         "wazuh_status": get_wazuh_status(),
-        "screen_width": screen_w,   # FIX #4: new field
-        "screen_height": screen_h,  # FIX #4: new field
+        "screen_width": screen_w,
+        "screen_height": screen_h,
     }
     if extended:
         info["username"] = os.getlogin() if hasattr(os, "getlogin") else "unknown"
@@ -364,9 +372,49 @@ def heartbeat_loop() -> None:
         send_heartbeat_once()
         STOP_EVENT.wait(HEARTBEAT_INTERVAL_SECONDS)
 
-# =========================
-# WebRTC Screen Capture Track
-# =========================
+# ==========================================================================
+# mangle_sdp_quality
+# ==========================================================================
+def mangle_sdp_quality(sdp: str, max_kbps: int) -> str:
+    lines = sdp.split('\r\n')
+    h264_pt: Optional[str] = None
+    vp8_pt:  Optional[str] = None
+    for line in lines:
+        m = re.match(r'^a=rtpmap:(\d+) H264/90000', line, re.IGNORECASE)
+        if m:
+            h264_pt = m.group(1)
+        m = re.match(r'^a=rtpmap:(\d+) VP8/90000', line, re.IGNORECASE)
+        if m:
+            vp8_pt = m.group(1)
+
+    out:       List[str] = []
+    in_video   = False
+    b_injected = False
+
+    for line in lines:
+        if line.startswith('m=video'):
+            in_video   = True
+            b_injected = False
+            if h264_pt and vp8_pt:
+                parts = line.split()
+                pts   = parts[3:]
+                if h264_pt in pts and vp8_pt in pts:
+                    pts.remove(h264_pt)
+                    pts.insert(pts.index(vp8_pt), h264_pt)
+                    line = ' '.join(parts[:3] + pts)
+        elif line.startswith('m=') and not line.startswith('m=video'):
+            in_video = False
+
+        out.append(line)
+
+        if in_video and not b_injected and line.startswith('c='):
+            out.append(f'b=AS:{max_kbps}')
+            out.append(f'b=TIAS:{max_kbps * 1000}')
+            b_injected = True
+
+    return '\r\n'.join(out)
+
+
 class ScreenCaptureTrack(VideoStreamTrack):
     kind = "video"
 
@@ -376,9 +424,9 @@ class ScreenCaptureTrack(VideoStreamTrack):
         self.monitor = self.sct.monitors[1]
         self.width = self.monitor['width']
         self.height = self.monitor['height']
-        self.frame_rate = 30
+        self.frame_rate = STREAM_CONFIG["frame_rate"]
         self.last_frame_time = 0
-        log(f"Screen capture started: {self.width}x{self.height}")
+        log(f"Screen capture started: {self.width}x{self.height} @ {self.frame_rate} fps")
 
     async def recv(self):
         try:
@@ -390,7 +438,7 @@ class ScreenCaptureTrack(VideoStreamTrack):
 
             img = self.sct.grab(self.monitor)
             import numpy as np
-            frame_array = np.array(img)[:, :, :3]   # BGRA -> BGR (drop alpha)
+            frame_array = np.array(img)[:, :, :3]
             frame = VideoFrame.from_ndarray(frame_array, format="bgr24")
             frame.pts = pts
             frame.time_base = time_base
@@ -398,7 +446,6 @@ class ScreenCaptureTrack(VideoStreamTrack):
             return frame
         except Exception as e:
             log(f"Screen capture error: {e}")
-            # Return a dummy frame to avoid breaking the stream
             import numpy as np
             pts, time_base = await self.next_timestamp()
             dummy = np.zeros((self.height, self.width, 3), dtype=np.uint8)
@@ -448,7 +495,7 @@ def handle_key_event(key: str, pressed: bool) -> None:
         log(f"Key error: {e}")
 
 # =========================
-# Task execution
+# Task execution (most functions omitted for brevity; include from your working script)
 # =========================
 def execute_command(command: str) -> Tuple[str, str]:
     try:
@@ -850,7 +897,7 @@ def handle_task(task_data: Dict[str, Any], task_id: Optional[str]) -> str:
     return f"Unsupported task: {task_name}"
 
 # =========================
-# WebRTC Signaling via HTTP (polling)
+# WebRTC Signaling via HTTP (polling) - multi-viewer
 # =========================
 def send_signal(action: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     url = f"{SIGNALING_URL}?action={action}"
@@ -875,133 +922,203 @@ def poll_for_offers():
         signaling_stop_event.wait(SIGNALING_POLL_INTERVAL_SECONDS)
 
 async def establish_webrtc(offer_sdp: str, viewer_id: str):
-    global webrtc_peer, webrtc_data_channel, webrtc_connection_ready
+    """Create a new peer connection for each viewer."""
+    global webrtc_peers, webrtc_data_channels, screen_tracks
+
     if not WEBRTC_AVAILABLE:
         log("WebRTC not available, cannot establish connection")
         return
-    if webrtc_peer:
-        await webrtc_peer.close()
 
-    # TURN configuration
-    TURN_SERVER = "turn:10.201.0.254:3478"
-    TURN_USERNAME = "tachyon"
-    TURN_CREDENTIAL = "TachyonDragon"
-
-    config = RTCConfiguration(
-        iceServers=[
-            RTCIceServer(urls=["stun:stun.l.google.com:19302"]),
-            RTCIceServer(urls=[TURN_SERVER], username=TURN_USERNAME, credential=TURN_CREDENTIAL)
-        ]
-    )
-    webrtc_peer = RTCPeerConnection(configuration=config)
-
-    # FIX #2: Register ALL event handlers immediately after creating the
-    # RTCPeerConnection, before setRemoteDescription / createAnswer. On fast
-    # local networks the connection can transition through states (checking →
-    # connected) before the answer is even sent, so handlers registered after
-    # submit_answer would miss those events and webrtc_connection_ready would
-    # never be set.
-    @webrtc_peer.on("connectionstatechange")
-    async def on_connectionstatechange():
-        log(f"Connection state: {webrtc_peer.connectionState}")
-        if webrtc_peer.connectionState == "connected":
-            log("WebRTC connected – video should appear")
-            webrtc_connection_ready.set()
-        elif webrtc_peer.connectionState in ("failed", "closed"):
-            log(f"WebRTC connection {webrtc_peer.connectionState}")
-            webrtc_connection_ready.clear()
-
-    @webrtc_peer.on("iceconnectionstatechange")
-    async def on_iceconnectionstatechange():
-        log(f"ICE connection state: {webrtc_peer.iceConnectionState}")
-
-    # Add screen capture track
-    video_track = ScreenCaptureTrack()
-    webrtc_peer.addTrack(video_track)
-
-    # Data channel for remote control and tasks (browser creates it, agent receives)
-    @webrtc_peer.on("datachannel")
-    def on_datachannel(channel):
-        global webrtc_data_channel
-        webrtc_data_channel = channel
-        webrtc_connection_ready.set()
-        log("Data channel opened")
-
-        @channel.on("message")
-        def on_message(message):
+    # If a peer for this viewer already exists, close it first (reconnect)
+    if viewer_id in webrtc_peers:
+        log(f"Closing existing peer for viewer {viewer_id}")
+        try:
+            await webrtc_peers[viewer_id].close()
+        except Exception as exc:
+            log(f"Error closing old peer: {exc}")
+        del webrtc_peers[viewer_id]
+        if viewer_id in webrtc_data_channels:
+            del webrtc_data_channels[viewer_id]
+        if viewer_id in screen_tracks:
             try:
-                data = json.loads(message)
-                if "task" in data:
-                    task_id = data.get("task_id")
-                    task_name = data.get("task")
-                    result = handle_task(data, task_id)
-                    response = {
-                        "type": "task_result",
-                        "task_id": task_id,
-                        "result_status": "success",
-                        "output_text": result
-                    }
-                    channel.send(json.dumps(response))
-                elif "event_type" in data:
-                    event_type = data["event_type"]
-                    if event_type == "mouse_move":
-                        handle_mouse_move(data.get("x"), data.get("y"))
-                    elif event_type == "mouse_click":
-                        handle_mouse_click(data.get("button"), data.get("pressed"))
-                    elif event_type == "mouse_scroll":
-                        handle_mouse_scroll(data.get("delta"))
-                    elif event_type == "key":
-                        handle_key_event(data.get("key"), data.get("pressed"))
-            except Exception as e:
-                log(f"Data channel message error: {e}")
+                screen_tracks[viewer_id].sct.close()
+            except:
+                pass
+            del screen_tracks[viewer_id]
 
-    # Set remote description (offer from browser)
-    offer = RTCSessionDescription(sdp=offer_sdp, type="offer")
-    await webrtc_peer.setRemoteDescription(offer)
-    log("Remote description set")
+    try:
+        # TURN configuration with TCP fallback
+        TURN_SERVER = "turn:10.201.0.254:3478?transport=tcp"
+        TURN_USERNAME = "tachyon"
+        TURN_CREDENTIAL = "TachyonDragon107"
 
-    # Create answer
-    answer = await webrtc_peer.createAnswer()
-    await webrtc_peer.setLocalDescription(answer)
-    log("Local description set")
+        config = RTCConfiguration(
+            iceServers=[
+                RTCIceServer(urls=["stun:stun.l.google.com:19302"]),
+                RTCIceServer(urls=[TURN_SERVER], username=TURN_USERNAME, credential=TURN_CREDENTIAL)
+            ]
+        )
+        pc = RTCPeerConnection(configuration=config)
+        webrtc_peers[viewer_id] = pc
 
-    # Wait for ICE gathering to complete (Vanilla ICE: all candidates go in the SDP)
-    log("Waiting for ICE gathering to complete...")
-    if webrtc_peer.iceGatheringState != "complete":
-        while webrtc_peer.iceGatheringState != "complete":
-            await asyncio.sleep(0.1)
-    log(f"ICE gathering state: {webrtc_peer.iceGatheringState}")
+        # Log ICE candidates for debugging
+        @pc.on("icecandidate")
+        async def on_icecandidate(candidate):
+            if candidate:
+                log(f"ICE candidate for {viewer_id}: {candidate.candidate}")
+            else:
+                log(f"ICE gathering complete for {viewer_id}")
 
-    # Send the complete answer SDP (with all candidates embedded)
-    send_signal("submit_answer", {
-        "viewer_id": viewer_id,
-        "answer_sdp": webrtc_peer.localDescription.sdp
-    })
-    log("WebRTC answer sent")
+        @pc.on("connectionstatechange")
+        async def on_connectionstatechange():
+            log(f"Connection state for {viewer_id}: {pc.connectionState}")
+            if pc.connectionState == "connected":
+                log(f"WebRTC connected for {viewer_id}")
+            elif pc.connectionState in ("failed", "closed"):
+                log(f"WebRTC connection {pc.connectionState} for {viewer_id}")
+                # Clean up
+                if viewer_id in webrtc_peers:
+                    del webrtc_peers[viewer_id]
+                if viewer_id in webrtc_data_channels:
+                    del webrtc_data_channels[viewer_id]
+                if viewer_id in screen_tracks:
+                    del screen_tracks[viewer_id]
+
+        @pc.on("iceconnectionstatechange")
+        async def on_iceconnectionstatechange():
+            log(f"ICE connection state for {viewer_id}: {pc.iceConnectionState}")
+
+        # Create a separate screen capture track for this viewer
+        video_track = ScreenCaptureTrack()
+        screen_tracks[viewer_id] = video_track
+        pc.addTrack(video_track)
+
+        @pc.on("datachannel")
+        def on_datachannel(channel):
+            webrtc_data_channels[viewer_id] = channel
+            log(f"Data channel opened for {viewer_id}")
+
+            @channel.on("message")
+            def on_message(message):
+                try:
+                    data = json.loads(message)
+                    if "task" in data:
+                        task_id = data.get("task_id")
+                        result = handle_task(data, task_id)
+                        response = {
+                            "type": "task_result",
+                            "task_id": task_id,
+                            "result_status": "success",
+                            "output_text": result
+                        }
+                        channel.send(json.dumps(response))
+                    elif data.get("type") == "set_quality":
+                        new_kbps = int(data.get("max_bitrate_kbps", STREAM_CONFIG["max_bitrate_kbps"]))
+                        new_fps  = int(data.get("frame_rate",        STREAM_CONFIG["frame_rate"]))
+                        log(f"set_quality for {viewer_id}: {new_kbps} kbps, {new_fps} fps")
+                        asyncio.run_coroutine_threadsafe(
+                            apply_sender_quality(pc, video_track, new_kbps, new_fps),
+                            webrtc_loop
+                        )
+                    elif "event_type" in data:
+                        event_type = data["event_type"]
+                        if event_type == "mouse_move":
+                            _input_executor.submit(handle_mouse_move, data.get("x"), data.get("y"))
+                        elif event_type == "mouse_click":
+                            _input_executor.submit(handle_mouse_click, data.get("button"), data.get("pressed"))
+                        elif event_type == "mouse_scroll":
+                            _input_executor.submit(handle_mouse_scroll, data.get("delta"))
+                        elif event_type == "key":
+                            _input_executor.submit(handle_key_event, data.get("key"), data.get("pressed"))
+                except Exception as e:
+                    log(f"Data channel message error for {viewer_id}: {e}")
+
+        # Set remote description (offer)
+        offer = RTCSessionDescription(sdp=offer_sdp, type="offer")
+        await pc.setRemoteDescription(offer)
+        log(f"Remote description set for {viewer_id}")
+
+        # Create answer
+        answer = await pc.createAnswer()
+        await pc.setLocalDescription(answer)
+        log(f"Local description set for {viewer_id}")
+
+        # Small delay to let SCTP initialise
+        await asyncio.sleep(0.5)
+
+        # Wait for ICE gathering to complete
+        log(f"Waiting for ICE gathering for {viewer_id}...")
+        if pc.iceGatheringState != "complete":
+            while pc.iceGatheringState != "complete":
+                await asyncio.sleep(0.1)
+        log(f"ICE gathering state for {viewer_id}: {pc.iceGatheringState}")
+
+        # Apply bandwidth constraints to the answer SDP
+        raw_answer_sdp = pc.localDescription.sdp
+        if 'm=application' in raw_answer_sdp:
+            log(f"Answer SDP for {viewer_id} contains data channel section")
+        else:
+            log(f"WARNING: Answer SDP for {viewer_id} does NOT contain data channel section!")
+
+        munged_answer_sdp = mangle_sdp_quality(raw_answer_sdp, STREAM_CONFIG["max_bitrate_kbps"])
+        log(f"Answer SDP munged for {viewer_id}: max_bitrate={STREAM_CONFIG['max_bitrate_kbps']} kbps")
+
+        # Send the answer
+        send_signal("submit_answer", {
+            "viewer_id":  viewer_id,
+            "answer_sdp": munged_answer_sdp
+        })
+        log(f"WebRTC answer sent for {viewer_id}")
+
+    except Exception as e:
+        log(f"Error during WebRTC establishment for {viewer_id}: {e}")
+        # Clean up on error
+        if viewer_id in webrtc_peers:
+            del webrtc_peers[viewer_id]
+        if viewer_id in webrtc_data_channels:
+            del webrtc_data_channels[viewer_id]
+        if viewer_id in screen_tracks:
+            del screen_tracks[viewer_id]
+
+async def apply_sender_quality(pc: RTCPeerConnection, track: VideoStreamTrack, max_bitrate_kbps: int, frame_rate: int) -> None:
+    """Apply quality constraints to a specific peer connection."""
+    if track is not None:
+        track.frame_rate = max(1, min(60, frame_rate))
+        log(f"Capture frame rate updated to {track.frame_rate} fps")
+
+    try:
+        for sender in pc.getSenders():
+            if sender.track and sender.track.kind == "video":
+                params = sender.getParameters()
+                if not params.encodings:
+                    from aiortc.rtp import RTCRtpEncodingParameters
+                    params.encodings = [RTCRtpEncodingParameters()]
+                for enc in params.encodings:
+                    enc.maxBitrate = max_bitrate_kbps * 1000
+                await sender.setParameters(params)
+                log(f"RTCRtpSender.setParameters: maxBitrate={max_bitrate_kbps} kbps")
+    except Exception as exc:
+        log(f"apply_sender_quality setParameters skipped: {exc}")
 
 # =========================
 # Main agent loop
 # =========================
 def main() -> int:
-    log("Starting agent (WebRTC + HTTP signaling)")
+    log("Starting agent (WebRTC + HTTP signaling) - Multi-viewer support")
     log(f"Agent UUID: {AGENT_UUID}")
     log(f"State file: {STATE_FILE}")
 
-    # Create the single asyncio event loop
     global webrtc_loop
     webrtc_loop = asyncio.new_event_loop()
     asyncio.set_event_loop(webrtc_loop)
 
-    # Start heartbeat thread
     heartbeat_thread = threading.Thread(target=heartbeat_loop, name="heartbeat-loop", daemon=True)
     heartbeat_thread.start()
 
-    # Start signaling poller thread (uses the global loop)
     poller_thread = threading.Thread(target=poll_for_offers, name="signaling-poller", daemon=True)
     poller_thread.start()
 
     try:
-        # Run the asyncio event loop forever
         webrtc_loop.run_forever()
     except KeyboardInterrupt:
         log("Interrupted by user")
@@ -1011,8 +1128,23 @@ def main() -> int:
         if TCP_SERVER_THREAD and TCP_SERVER_THREAD.is_alive():
             tcp_server_stop()
         heartbeat_thread.join(timeout=2)
-        if webrtc_loop:
+
+        # Close all peer connections
+        async def close_all():
+            for viewer_id, pc in webrtc_peers.items():
+                await pc.close()
+        if webrtc_loop and not webrtc_loop.is_closed():
+            webrtc_loop.run_until_complete(close_all())
+            pending = [t for t in asyncio.all_tasks(webrtc_loop) if not t.done()]
+            if pending:
+                log(f"Cancelling {len(pending)} pending asyncio task(s)...")
+                for task in pending:
+                    task.cancel()
+                webrtc_loop.run_until_complete(
+                    asyncio.gather(*pending, return_exceptions=True)
+                )
             webrtc_loop.close()
+
         log("Agent stopped")
 
     return 0

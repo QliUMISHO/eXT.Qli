@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head><title>TURN Test</title></head>
+<body>
+<video id="local" autoplay muted></video>
+<video id="remote" autoplay></video>
+<script>
+const configuration = {
+  iceServers: [
+    { urls: 'turn:10.201.0.254:3478', username: 'tachyon', credential: 'TachyonDragon107' }
+  ]
+};
+let pc = new RTCPeerConnection(configuration);
+pc.onicecandidate = e => console.log('ICE candidate:', e.candidate?.candidate);
+pc.ontrack = e => document.getElementById('remote').srcObject = e.streams[0];
+navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+  .then(stream => {
+    document.getElementById('local').srcObject = stream;
+    stream.getTracks().forEach(track => pc.addTrack(track, stream));
+    pc.createOffer().then(offer => pc.setLocalDescription(offer));
+  })
+  .catch(console.error);
+</script>
+</body>
+</html>
