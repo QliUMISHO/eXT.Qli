@@ -24,3 +24,7 @@ UPDATE 4/7/26:
 UPDATE 4/14/26: 
 
 • working remote access without permission. receives mouse and keyboard input (WebRTC). 
+
+UPDATE 4/16/26: 
+
+• solved major issue of WebRTC not closing properly, thus preventing reconnecting at the same agent. 
