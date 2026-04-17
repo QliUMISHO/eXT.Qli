@@ -2,29 +2,22 @@
 remote administration tool for totally legal use in small scale organizations. used to manage PCs in an efficient way.  
 written in Python, PHP, JS, and GO (might be replaced with Python too).
 
-IMPORTANT NOTICE:
+IMPORTANT NOTICE from the guy that made this lmaooooo: 
 
-  eXT.Qli is intended solely for educational, research, and authorized administrative purposes. Any use of this software on systems, networks, or devices without proper authorization is strictly prohibited. By using this software, you acknowledge that you are fully responsible for ensuring compliance with all applicable laws, regulations, and organizational policies. Unauthorized or malicious use may result in severe legal penalties. The developer disclaims all liability for any damages, losses, or legal issues arising from the misuse or improper use of this software.  
+  eXT.Qli — read this before you even think of running it  
   
+this software exists for learning, testing, and authorized environments only
+if you point this at anything you don’t own or don’t have clear permission for, that’s on you — not the tool, not the dev, not anyone else
+
+you break something?  
+you trip a security system?  
+you get flagged, banned, or worse?  
   
-WILL BE MADE IN 2 TYPES, WEBSOCKET WITH SERVER-SIDE BROKER AND WEBRTC
+that’s your responsibility, full stop  
+  
+no excuses like “just testing” or “didn’t know” — that doesn’t fly in the real world  
+the dev didn’t make this to babysit you  
+it’s provided as-is, no guarantees, no safety net  
+if you misuse it and things go sideways, you’re the one holding the bag  
 
-UPDATE 3/17/26:
-
-• uses nmap for scanning ports 
-
-UPDATE 4/1/26:
-
-• this fucking shit turned into an agent managing system magically (abandoned sophos type shit) 
-
-UPDATE 4/7/26: 
-
-• working remote access without permission. receives mouse and keyboard input (pure websocket)
-
-UPDATE 4/14/26: 
-
-• working remote access without permission. receives mouse and keyboard input (WebRTC). 
-
-UPDATE 4/16/26: 
-
-• solved major issue of WebRTC not closing properly, thus preventing reconnecting at the same agent. 
+TLDR: so yeah. use it properly, keep it legal, don’t be stupid about it. or don’t use it at all  
