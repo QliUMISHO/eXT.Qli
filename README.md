@@ -1,6 +1,6 @@
 # eXT.Qli
 remote administration tool for totally legal use in small scale organizations. used to manage PCs in an efficient way.  
-written in Python, PHP, JS, and GO (might be replaced with Python too).
+written in Python, PHP, JS, and G̶O̶ ̶(̶m̶i̶g̶h̶t̶ ̶b̶e̶ ̶r̶e̶p̶l̶a̶c̶e̶d̶ ̶w̶i̶t̶h̶ ̶P̶y̶t̶h̶o̶n̶ ̶t̶o̶o̶)̶.̶ (fully replaced by Python at this moment of development stage)
 
 IMPORTANT NOTICE from the guy that made this lmaooooo: 
 
