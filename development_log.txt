@@ -1,0 +1,21 @@
+WILL BE MADE IN 2 TYPES, WEBSOCKET WITH SERVER-SIDE BROKER AND WEBRTC
+
+UPDATE 3/17/26:
+
+• uses nmap for scanning ports 
+
+UPDATE 4/1/26:
+
+• this fucking shit turned into an agent managing system magically (abandoned sophos type shit) 
+
+UPDATE 4/7/26: 
+
+• working remote access without permission. receives mouse and keyboard input (pure websocket)
+
+UPDATE 4/14/26: 
+
+• working remote access without permission. receives mouse and keyboard input (WebRTC). 
+
+UPDATE 4/16/26: 
+
+• solved major issue of WebRTC not closing properly, thus preventing reconnecting at the same agent. 
