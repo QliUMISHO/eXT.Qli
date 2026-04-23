@@ -11,7 +11,7 @@ $base = '/eXT.Qli';
     <link rel="stylesheet" href="https://unpkg.com/@knadh/oat/oat.min.css">
     <script src="https://unpkg.com/@knadh/oat/oat.min.js" defer></script>
 
-    <link rel="stylesheet" href="<?= $base ?>/assets/css/app.css?v=13">
+    <link rel="stylesheet" href="<?= $base ?>/assets/css/app.css?v=14">
 </head>
 <body>
     <div id="pageLoader" class="page-loader">
@@ -24,6 +24,6 @@ $base = '/eXT.Qli';
 
     <?php require __DIR__ . '/frontend/views/dashboard.php'; ?>
 
-    <script src="<?= $base ?>/assets/js/app.js?v=13"></script>
+    <script src="<?= $base ?>/assets/js/app.js?v=14"></script>
 </body>
 </html>
