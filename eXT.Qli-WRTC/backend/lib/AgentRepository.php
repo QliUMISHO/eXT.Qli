@@ -2,40 +2,87 @@
 
 class AgentRepository
 {
+    private static function columnExists(PDO $pdo, string $table, string $column): bool
+    {
+        static $cache = [];
+        $key = $table . '.' . $column;
+        if (array_key_exists($key, $cache)) {
+            return $cache[$key];
+        }
+
+        $stmt = $pdo->prepare("\n            SELECT COUNT(*)\n            FROM INFORMATION_SCHEMA.COLUMNS\n            WHERE TABLE_SCHEMA = DATABASE()\n              AND TABLE_NAME = :table_name\n              AND COLUMN_NAME = :column_name\n        ");
+        $stmt->execute([
+            ':table_name' => $table,
+            ':column_name' => $column,
+        ]);
+
+        $cache[$key] = ((int)$stmt->fetchColumn() > 0);
+        return $cache[$key];
+    }
+
+    private static function cleanUsername($value): string
+    {
+        $value = trim((string)($value ?? ''));
+        if ($value === '') {
+            return '';
+        }
+
+        $lower = strtolower($value);
+        if (in_array($lower, [
+            'unknown',
+            'none',
+            'null',
+            '-',
+            'username unavailable',
+            'fetching username...',
+            'waiting for username...',
+            'username not reported',
+        ], true)) {
+            return '';
+        }
+
+        return $value;
+    }
+
+    public static function extractUsername(array $data): string
+    {
+        $candidateKeys = [
+            'endpoint_username_output',
+            'username_stdout',
+            'username_probe_output',
+            'logged_in_username',
+            'username',
+            'current_user',
+            'logged_in_user',
+            'active_user',
+            'console_user',
+            'user',
+        ];
+
+        foreach ($candidateKeys as $key) {
+            if (array_key_exists($key, $data)) {
+                $username = self::cleanUsername($data[$key]);
+                if ($username !== '') {
+                    return $username;
+                }
+            }
+        }
+
+        return '';
+    }
+
     public static function upsert(PDO $pdo, array $data): void
     {
-        $sql = "
-            INSERT INTO agents (
-                agent_uuid, hostname, os_name, os_version, architecture,
-                local_ip, mac_address, cpu_info, ram_mb, disk_total_gb,
-                disk_free_gb, uptime_seconds, wazuh_status, status,
-                approved, agent_token, last_seen
-            ) VALUES (
-                :agent_uuid, :hostname, :os_name, :os_version, :architecture,
-                :local_ip, :mac_address, :cpu_info, :ram_mb, :disk_total_gb,
-                :disk_free_gb, :uptime_seconds, :wazuh_status, 'online',
-                1, :agent_token, NOW()
-            )
-            ON DUPLICATE KEY UPDATE
-                hostname = VALUES(hostname),
-                os_name = VALUES(os_name),
-                os_version = VALUES(os_version),
-                architecture = VALUES(architecture),
-                local_ip = VALUES(local_ip),
-                mac_address = VALUES(mac_address),
-                cpu_info = VALUES(cpu_info),
-                ram_mb = VALUES(ram_mb),
-                disk_total_gb = VALUES(disk_total_gb),
-                disk_free_gb = VALUES(disk_free_gb),
-                uptime_seconds = VALUES(uptime_seconds),
-                wazuh_status = VALUES(wazuh_status),
-                status = 'online',
-                agent_token = VALUES(agent_token),
-                last_seen = NOW()
-        ";
+        $hasUsernameColumn = self::columnExists($pdo, 'agents', 'username');
+        $username = self::extractUsername($data);
 
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([
+        $insertUsernameColumn = $hasUsernameColumn ? ', username' : '';
+        $insertUsernameValue = $hasUsernameColumn ? ', :username' : '';
+        $updateUsernameSql = $hasUsernameColumn && $username !== '' ? ', username = VALUES(username)' : '';
+
+        $sql = "\n            INSERT INTO agents (\n                agent_uuid, hostname{$insertUsernameColumn}, os_name, os_version, architecture,\n                local_ip, mac_address, cpu_info, ram_mb, disk_total_gb,\n                disk_free_gb, uptime_seconds, wazuh_status, status,\n                approved, agent_token, last_seen\n            ) VALUES (\n                :agent_uuid, :hostname{$insertUsernameValue}, :os_name, :os_version, :architecture,\n                :local_ip, :mac_address, :cpu_info, :ram_mb, :disk_total_gb,\n                :disk_free_gb, :uptime_seconds, :wazuh_status, 'online',\n                1, :agent_token, NOW()\n            )\n            ON DUPLICATE KEY UPDATE\n                hostname = VALUES(hostname){$updateUsernameSql},\n                os_name = VALUES(os_name),\n                os_version = VALUES(os_version),\n                architecture = VALUES(architecture),\n                local_ip = VALUES(local_ip),\n                mac_address = VALUES(mac_address),\n                cpu_info = VALUES(cpu_info),\n                ram_mb = VALUES(ram_mb),\n                disk_total_gb = VALUES(disk_total_gb),\n                disk_free_gb = VALUES(disk_free_gb),\n                uptime_seconds = VALUES(uptime_seconds),\n                wazuh_status = VALUES(wazuh_status),\n                status = 'online',\n                agent_token = VALUES(agent_token),\n                last_seen = NOW()\n        ";
+
+        $params = [
             ':agent_uuid' => $data['agent_uuid'] ?? '',
             ':hostname' => $data['hostname'] ?? '',
             ':os_name' => $data['os_name'] ?? '',
@@ -50,15 +97,27 @@ class AgentRepository
             ':uptime_seconds' => (int)($data['uptime_seconds'] ?? 0),
             ':wazuh_status' => $data['wazuh_status'] ?? 'unknown',
             ':agent_token' => $data['agent_token'] ?? '',
-        ]);
+        ];
+
+        if ($hasUsernameColumn) {
+            $params[':username'] = $username;
+        }
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+
+        if ($hasUsernameColumn && $username !== '') {
+            $stmt = $pdo->prepare("\n                UPDATE agents\n                SET username = :username\n                WHERE agent_uuid = :agent_uuid\n                LIMIT 1\n            ");
+            $stmt->execute([
+                ':username' => $username,
+                ':agent_uuid' => $data['agent_uuid'] ?? '',
+            ]);
+        }
     }
 
     public static function insertHeartbeat(PDO $pdo, string $agentUuid, array $payload): void
     {
-        $stmt = $pdo->prepare("
-            INSERT INTO agent_heartbeats (agent_uuid, payload_json)
-            VALUES (:agent_uuid, :payload_json)
-        ");
+        $stmt = $pdo->prepare("\n            INSERT INTO agent_heartbeats (agent_uuid, payload_json)\n            VALUES (:agent_uuid, :payload_json)\n        ");
         $stmt->execute([
             ':agent_uuid' => $agentUuid,
             ':payload_json' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
@@ -67,24 +126,13 @@ class AgentRepository
 
     public static function getAll(PDO $pdo): array
     {
-        $stmt = $pdo->query("
-            SELECT *
-            FROM agents
-            ORDER BY last_seen DESC, hostname ASC
-        ");
+        $stmt = $pdo->query("\n            SELECT *\n            FROM agents\n            ORDER BY last_seen DESC, hostname ASC\n        ");
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public static function getPendingTasks(PDO $pdo, string $agentUuid): array
     {
-        $stmt = $pdo->prepare("
-            SELECT id, task_type, task_payload
-            FROM agent_tasks
-            WHERE agent_uuid = :agent_uuid
-              AND status = 'pending'
-            ORDER BY id ASC
-            LIMIT 10
-        ");
+        $stmt = $pdo->prepare("\n            SELECT id, task_type, task_payload\n            FROM agent_tasks\n            WHERE agent_uuid = :agent_uuid\n              AND status = 'pending'\n            ORDER BY id ASC\n            LIMIT 10\n        ");
         $stmt->execute([':agent_uuid' => $agentUuid]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -96,20 +144,13 @@ class AgentRepository
         }
 
         $placeholders = implode(',', array_fill(0, count($taskIds), '?'));
-        $stmt = $pdo->prepare("
-            UPDATE agent_tasks
-            SET status = 'picked', picked_at = NOW()
-            WHERE id IN ($placeholders)
-        ");
+        $stmt = $pdo->prepare("\n            UPDATE agent_tasks\n            SET status = 'picked', picked_at = NOW()\n            WHERE id IN ($placeholders)\n        ");
         $stmt->execute($taskIds);
     }
 
     public static function saveTaskResult(PDO $pdo, array $data): void
     {
-        $stmt = $pdo->prepare("
-            INSERT INTO agent_task_results (task_id, agent_uuid, result_status, output_text)
-            VALUES (:task_id, :agent_uuid, :result_status, :output_text)
-        ");
+        $stmt = $pdo->prepare("\n            INSERT INTO agent_task_results (task_id, agent_uuid, result_status, output_text)\n            VALUES (:task_id, :agent_uuid, :result_status, :output_text)\n        ");
         $stmt->execute([
             ':task_id' => (int)$data['task_id'],
             ':agent_uuid' => $data['agent_uuid'],
@@ -117,11 +158,7 @@ class AgentRepository
             ':output_text' => $data['output_text'] ?? '',
         ]);
 
-        $stmt = $pdo->prepare("
-            UPDATE agent_tasks
-            SET status = 'completed', completed_at = NOW()
-            WHERE id = :id
-        ");
+        $stmt = $pdo->prepare("\n            UPDATE agent_tasks\n            SET status = 'completed', completed_at = NOW()\n            WHERE id = :id\n        ");
         $stmt->execute([':id' => (int)$data['task_id']]);
     }
 }
