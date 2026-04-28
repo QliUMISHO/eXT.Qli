@@ -96,16 +96,6 @@ STARTED AS A JOKE. ENDED AS A THING.
 ・UI is cleaner, more compact, and less broken on narrow windows
 ・username can appear immediately through WebRTC data channel before database refresh
 ・database persistence is available through save_agent_identity.php
-
-[UNSOLVED PECULIARITIES]
-・agents.username may stay blank if save_agent_identity.php is missing, blocked, or using the wrong shared token
-・WebRTC identity only arrives after data channel connection opens
-・offline agents cannot report fresh username through data channel
-・old cached app.js can still cause confusing behavior until hard refresh
-・frontend opened from /eXT.Qli_preprod still calls backend under /eXT.Qli because the agent is configured there
-・hardcoded TURN/API values still exist and should eventually be centralized
-
-[CURRENT STATE]
 ・network scanner: nmap --top-ports 1000, detect server ip, save to devices
 ・agent system: heartbeats every 30 sec, tasks via webrtc dc or http
 ・screen viewer: webrtc with turn relay, multi-viewer, pause/resume, remote control
@@ -118,6 +108,12 @@ STARTED AS A JOKE. ENDED AS A THING.
 ・task result delivery is fire-and-forget (no retry)
 ・send_agent_task.php calls external go-between on port 8081 (not in files)
 ・agent-share.php removed (410) – pure webrtc now
+・agents.username may stay blank if save_agent_identity.php is missing, blocked, or using the wrong shared token
+・WebRTC identity only arrives after data channel connection opens
+・offline agents cannot report fresh username through data channel
+・old cached app.js can still cause confusing behavior until hard refresh
+・frontend opened from /eXT.Qli_preprod still calls backend under /eXT.Qli because the agent is configured there
+・hardcoded TURN/API values still exist and should eventually be centralized
 
 [NOTES TO SELF]
 this was supposed to be simple. it never is.
