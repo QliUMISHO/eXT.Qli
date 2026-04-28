@@ -48,6 +48,63 @@ STARTED AS A JOKE. ENDED AS A THING.
 ・agent_state.json for persistent uuid/token
 ・turn.html test file (turn:10.201.0.254:3478)
 
+[2026/04/28]
+・fixed connected agent card display logic
+・card title now displays logged-in PC username instead of hostname
+・kept IP address visible under the username
+・changed the "User:" line below IP to display hostname as requested
+・confirmed browser JS cannot directly read remote Windows username
+・used extqli_agent.py getpass.getuser() output as the endpoint username source
+・added endpoint username debug print in extqli_agent.py
+・sent agent identity through existing WebRTC data channel
+・app.js listens for agent_identity messages from the endpoint
+・cards now update instantly when the data channel receives username
+・added frontend-side identity cache per agent UUID
+・added save_agent_identity.php flow so username can persist back to MySQL
+・agents.username can now be updated from the frontend identity sync path
+・fixed issue where username appeared on cards but not in phpMyAdmin
+・kept WebRTC screen preview and remote control behavior intact
+
+[2026/04/28 - UI / FRONTEND]
+・integrated Oat CDN styling direction for a cleaner component-based look
+・rebuilt dashboard layout into a modern glass-style console UI
+・updated sidebar branding with eXT.Qli identity
+・improved agent cards with cleaner spacing, badges, actions, and preview area
+・renamed visible and CSS-level "sentinel" references into "extqli"
+・removed leftover Sentinel naming from dashboard structure
+・removed the Realtime Monitoring / Live Agent Grid status summary block as requested
+・kept Connected Agents and Screen Viewer tab behavior unchanged
+・preserved required IDs used by app.js:
+  - extqliClientList
+  - extqliMonitorGrid
+  - screenAgentSelect
+  - remoteScreenVideo
+  - remoteControlOverlay
+  - extqliRemoteStatus
+・fixed sidebar overflow / clipped menu text on narrow screen widths
+・expanded sidebar width and added safe ellipsis handling
+・prevented sidebar cards and nav labels from breaking the layout
+・kept frontend-only changes focused on appearance and rendering
+
+[CURRENT STATE]
+・agent cards display logged-in username as the main title
+・IP address displays below the username
+・User line displays hostname
+・screen preview continues through WebRTC
+・remote control still uses existing data channel flow
+・dashboard frontend now uses extqli naming instead of sentinel naming
+・UI is cleaner, more compact, and less broken on narrow windows
+・username can appear immediately through WebRTC data channel before database refresh
+・database persistence is available through save_agent_identity.php
+
+[UNSOLVED PECULIARITIES]
+・agents.username may stay blank if save_agent_identity.php is missing, blocked, or using the wrong shared token
+・WebRTC identity only arrives after data channel connection opens
+・offline agents cannot report fresh username through data channel
+・old cached app.js can still cause confusing behavior until hard refresh
+・frontend opened from /eXT.Qli_preprod still calls backend under /eXT.Qli because the agent is configured there
+・hardcoded TURN/API values still exist and should eventually be centralized
+
 [CURRENT STATE]
 ・network scanner: nmap --top-ports 1000, detect server ip, save to devices
 ・agent system: heartbeats every 30 sec, tasks via webrtc dc or http
