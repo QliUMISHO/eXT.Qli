@@ -1,0 +1,323 @@
+.extqli-agent-card,
+.extqli-monitor-card {
+    position: relative;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    isolation: isolate;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius);
+    background:
+        linear-gradient(180deg, rgba(34, 39, 47, 0.98), rgba(24, 28, 34, 0.98));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.035),
+        0 14px 34px rgba(0, 0, 0, 0.24);
+    transition:
+        transform .22s ease,
+        border-color .22s ease,
+        box-shadow .22s ease,
+        background .22s ease;
+}
+
+.extqli-agent-card:hover,
+.extqli-monitor-card:hover {
+    border-color: rgba(255, 143, 42, 0.42);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.045),
+        0 18px 42px rgba(0, 0, 0, 0.3),
+        0 0 0 1px rgba(255, 143, 42, 0.08);
+}
+
+.extqli-agent-card {
+    padding: 12px;
+}
+
+.extqli-monitor-card {
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    min-height: 304px;
+}
+
+.extqli-agent-card::before,
+.extqli-monitor-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(circle at top right, rgba(255, 143, 42, 0.08), transparent 30%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 42%);
+}
+
+.extqli-card-header,
+.extqli-monitor-header {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.extqli-card-header {
+    padding: 0;
+    margin-bottom: 8px;
+}
+
+.extqli-monitor-header {
+    padding: 24px 0 10px;
+    margin-bottom: 10px;
+    min-height: 82px;
+}
+
+.extqli-monitor-info {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.extqli-card-status {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+}
+
+.extqli-card-title {
+    position: relative;
+    margin: 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.15;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    word-break: break-word;
+}
+
+.extqli-card-ip,
+.extqli-card-user,
+.extqli-card-id,
+.extqli-card-meta {
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+.extqli-card-ip,
+.extqli-card-user {
+    margin-top: 4px;
+}
+
+.extqli-card-id {
+    margin-top: 8px;
+    color: #b8c0c8;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    overflow-wrap: anywhere;
+}
+
+.extqli-card-meta {
+    margin-top: 4px;
+    overflow-wrap: anywhere;
+}
+
+.extqli-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: 9px;
+    line-height: 1;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    border: 1px solid transparent;
+}
+
+.extqli-status-badge::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    flex: 0 0 6px;
+    border-radius: 999px;
+}
+
+.extqli-live-badge {
+    color: #7df0b5;
+    background: rgba(46, 204, 113, 0.12);
+    border-color: rgba(46, 204, 113, 0.28);
+}
+
+.extqli-live-badge::before {
+    background: #2ecc71;
+    box-shadow: 0 0 10px rgba(46, 204, 113, 0.24);
+}
+
+.extqli-offline-badge {
+    color: #ff9898;
+    background: rgba(235, 87, 87, 0.12);
+    border-color: rgba(235, 87, 87, 0.28);
+}
+
+.extqli-offline-badge::before {
+    background: #eb5757;
+    box-shadow: 0 0 10px rgba(235, 87, 87, 0.18);
+}
+
+.extqli-monitor-card.is-selected,
+.extqli-agent-card.is-selected {
+    border-color: rgba(255, 143, 42, 0.62);
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 143, 42, 0.14),
+        0 18px 42px rgba(0, 0, 0, 0.32),
+        0 0 22px rgba(255, 143, 42, 0.08);
+}
+
+.extqli-monitor-card.is-selected::after {
+    content: "SELECTED ENDPOINT";
+    position: absolute;
+    top: 10px;
+    left: 12px;
+    z-index: 40;
+    display: inline-flex;
+    align-items: center;
+    min-height: 12px;
+    padding-left: 16px;
+    color: var(--accent);
+    font-size: 8px;
+    line-height: 1;
+    font-weight: 900;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    background: linear-gradient(var(--accent), var(--accent)) left center / 8px 8px no-repeat;
+    pointer-events: none;
+}
+
+.extqli-agent-card.is-selected::after {
+    content: "";
+    position: absolute;
+    top: 10px;
+    left: 0;
+    z-index: 40;
+    width: 3px;
+    height: calc(100% - 20px);
+    background: var(--accent);
+    box-shadow: 0 0 18px rgba(255, 143, 42, 0.22);
+    pointer-events: none;
+}
+
+.extqli-monitor-card.is-selected .extqli-card-title,
+.extqli-agent-card.is-selected .extqli-card-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.extqli-monitor-card.is-selected .extqli-card-title::before,
+.extqli-agent-card.is-selected .extqli-card-title::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    flex: 0 0 7px;
+    display: inline-block;
+    background: var(--accent);
+    box-shadow: 0 0 10px rgba(255, 143, 42, 0.18);
+}
+
+.extqli-preview-wrapper {
+    position: relative;
+    z-index: 10;
+    flex: 1 1 auto;
+    min-height: 170px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius);
+    background:
+        linear-gradient(180deg, rgba(8, 11, 14, 0.96), rgba(5, 8, 11, 0.98));
+    overflow: hidden;
+    transition:
+        border-color .22s ease,
+        box-shadow .22s ease,
+        transform .22s ease;
+}
+
+.extqli-monitor-card:hover .extqli-preview-wrapper,
+.extqli-monitor-card.is-selected .extqli-preview-wrapper {
+    border-color: rgba(255, 143, 42, 0.3);
+    box-shadow: inset 0 0 0 1px rgba(255, 143, 42, 0.06);
+}
+
+.extqli-preview-wrapper::before,
+.extqli-preview-wrapper::after {
+    display: none !important;
+    content: none !important;
+}
+
+.extqli-preview-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: #000;
+}
+
+.extqli-preview-overlay {
+    color: var(--muted);
+    font-size: 11px;
+    text-align: center;
+    letter-spacing: .01em;
+}
+
+.extqli-card-actions,
+.extqli-monitor-actions {
+    position: relative;
+    z-index: 10;
+    display: grid;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.extqli-card-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.extqli-monitor-actions {
+    grid-template-columns: 1fr;
+    padding: 0;
+    margin-top: 10px;
+}
+
+.extqli-card-actions .btn,
+.extqli-monitor-actions .btn {
+    width: 100%;
+    min-width: 0;
+    padding: 0 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.extqli-monitor-actions .btn {
+    font-size: 9px;
+}
+
+.card-close-btn {
+    display: none !important;
+}
+
+.extqli-agent-card > *:not(.fx-frame):not(.fx-rail):not(.fx-edge):not(.fx-orbit):not(.fx-node):not(.fx-card-corner):not(.fx-card-focus),
+.extqli-monitor-card > *:not(.fx-frame):not(.fx-rail):not(.fx-edge):not(.fx-orbit):not(.fx-node):not(.fx-card-corner):not(.fx-card-focus) {
+    position: relative;
+    z-index: 10;
+}
+
+@media (max-width: 760px) {
+    .extqli-card-actions,
+    .extqli-monitor-actions {
+        grid-template-columns: 1fr;
+    }
+}

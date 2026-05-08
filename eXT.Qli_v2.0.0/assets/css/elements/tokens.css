@@ -1,0 +1,26 @@
+:root {
+    --extqli-bg-0: #020817;
+    --extqli-bg-1: #06122a;
+    --extqli-bg-2: #0a1b3d;
+    --extqli-bg-3: #0f254f;
+    --extqli-card: rgba(11, 23, 51, 0.78);
+    --extqli-card-strong: rgba(12, 27, 61, 0.92);
+    --extqli-glass: rgba(12, 27, 61, 0.58);
+    --extqli-line: rgba(148, 176, 255, 0.16);
+    --extqli-line-strong: rgba(148, 176, 255, 0.28);
+    --extqli-text: #f4f8ff;
+    --extqli-soft: rgba(222, 233, 255, 0.72);
+    --extqli-muted: rgba(178, 198, 238, 0.58);
+    --extqli-accent: #6ea2ff;
+    --extqli-accent-2: #3f7cff;
+    --extqli-accent-3: #8db6ff;
+    --extqli-success: #49d39d;
+    --extqli-danger: #ff6d8a;
+    --extqli-warning: #ffd166;
+    --extqli-shadow: 0 24px 70px rgba(0, 0, 0, 0.44);
+    --extqli-shadow-soft: 0 18px 46px rgba(0, 0, 0, 0.28);
+    --extqli-radius-xl: 28px;
+    --extqli-radius-lg: 22px;
+    --extqli-radius-md: 16px;
+    --extqli-sidebar-width: 280px;
+}

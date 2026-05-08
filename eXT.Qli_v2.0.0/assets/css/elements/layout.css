@@ -1,0 +1,23 @@
+.app-layout {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: var(--extqli-sidebar-width) minmax(0, 1fr);
+    width: 100%;
+    max-width: 100%;
+}
+
+.sidebar-shell {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    width: var(--extqli-sidebar-width);
+    min-width: 0;
+}
+
+.main-shell {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+}

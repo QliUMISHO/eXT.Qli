@@ -1,0 +1,434 @@
+.fx-ready .hero-card,
+.fx-ready .agent-admin-tabs-shell,
+.fx-ready .screen-board {
+    animation: fxConsoleOpen 460ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.fx-ready .agent-admin-tabs-shell {
+    animation-delay: 80ms;
+}
+
+@keyframes fxConsoleOpen {
+    0% {
+        opacity: 0;
+        transform: translateY(12px) scale(.992);
+        filter: blur(5px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0);
+    }
+}
+
+.fx-card {
+    --fx-rotate-x: 0deg;
+    --fx-rotate-y: 0deg;
+    --fx-pointer-x: 50%;
+    --fx-pointer-y: 50%;
+    --fx-phase: 0s;
+    isolation: isolate;
+    transform-style: preserve-3d;
+    will-change: transform;
+}
+
+.fx-card.fx-new {
+    animation: fxCardLoad 260ms cubic-bezier(.16, 1, .3, 1) both;
+    animation-delay: calc(var(--fx-index, 0) * 16ms);
+}
+
+@keyframes fxCardLoad {
+    0% {
+        opacity: 0;
+        transform: translateY(7px);
+        filter: blur(3px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+        filter: blur(0);
+    }
+}
+
+.fx-card.fx-hovering {
+    transform:
+        perspective(1000px)
+        rotateX(var(--fx-rotate-x))
+        rotateY(var(--fx-rotate-y))
+        translateY(-5px)
+        scale(1.008) !important;
+}
+
+.fx-frame,
+.fx-rail,
+.fx-edge,
+.fx-orbit,
+.fx-node,
+.fx-card-corner,
+.fx-card-focus {
+    pointer-events: none;
+}
+
+.fx-frame {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    opacity: .42;
+    background:
+        radial-gradient(
+            circle at var(--fx-pointer-x) var(--fx-pointer-y),
+            rgba(255, 143, 42, .12),
+            transparent 36%
+        ),
+        linear-gradient(
+            145deg,
+            rgba(255, 143, 42, .035),
+            transparent 46%,
+            rgba(109, 176, 255, .03)
+        );
+    transition: opacity 180ms ease;
+}
+
+.fx-card:hover .fx-frame,
+.fx-card.is-selected .fx-frame {
+    opacity: .76;
+}
+
+.fx-card-focus {
+    position: absolute;
+    inset: 1px;
+    z-index: 2;
+    opacity: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background:
+        linear-gradient(90deg, rgba(255,143,42,.15), transparent 24%, transparent 76%, rgba(255,143,42,.15)),
+        linear-gradient(180deg, rgba(255,143,42,.11), transparent 22%, transparent 78%, rgba(255,143,42,.11));
+    mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+    -webkit-mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    transition: opacity 180ms ease;
+}
+
+.fx-card:hover .fx-card-focus,
+.fx-card.is-selected .fx-card-focus {
+    opacity: .9;
+}
+
+.fx-rail {
+    position: absolute;
+    z-index: 3;
+    opacity: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 143, 42, .44), transparent);
+    transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.fx-rail-top,
+.fx-rail-bottom {
+    left: 0;
+    width: 100%;
+    height: 1px;
+}
+
+.fx-rail-top {
+    top: 0;
+    transform: translateX(-18%);
+}
+
+.fx-rail-bottom {
+    bottom: 0;
+    transform: translateX(18%);
+}
+
+.fx-rail-left,
+.fx-rail-right {
+    top: 0;
+    width: 1px;
+    height: 100%;
+    background: linear-gradient(180deg, transparent, rgba(255, 143, 42, .44), transparent);
+}
+
+.fx-rail-left {
+    left: 0;
+    transform: translateY(18%);
+}
+
+.fx-rail-right {
+    right: 0;
+    transform: translateY(-18%);
+}
+
+.fx-card:hover .fx-rail,
+.fx-card.is-selected .fx-rail {
+    opacity: .7;
+    transform: translate(0, 0);
+}
+
+.fx-edge {
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+    opacity: .07;
+    background:
+        linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px),
+        linear-gradient(rgba(255,255,255,.08) 1px, transparent 1px);
+    background-size: 18px 18px;
+    mask-image: linear-gradient(180deg, #000, transparent 88%);
+}
+
+.fx-orbit {
+    position: absolute;
+    z-index: 1;
+    width: 140px;
+    height: 140px;
+    right: -68px;
+    top: -68px;
+    opacity: 0;
+    border: 1px solid rgba(255, 143, 42, .14);
+    border-radius: 999px;
+    transition: opacity 180ms ease;
+}
+
+.fx-orbit::before,
+.fx-orbit::after {
+    content: "";
+    position: absolute;
+    border-radius: 999px;
+    border: 1px solid rgba(109, 176, 255, .07);
+}
+
+.fx-orbit::before {
+    inset: 16px;
+}
+
+.fx-orbit::after {
+    inset: 34px;
+}
+
+.fx-card:hover .fx-orbit,
+.fx-card.is-selected .fx-orbit {
+    opacity: .8;
+}
+
+.fx-node {
+    position: absolute;
+    z-index: 4;
+    width: 3px;
+    height: 3px;
+    border-radius: 999px;
+    background: rgba(255, 143, 42, .78);
+    box-shadow: 0 0 8px rgba(255, 143, 42, .25);
+    opacity: 0;
+    transition: opacity 180ms ease;
+}
+
+.fx-node-a {
+    top: 8px;
+    right: 38px;
+}
+
+.fx-node-b {
+    right: 8px;
+    bottom: 38px;
+}
+
+.fx-node-c {
+    bottom: 8px;
+    left: 38px;
+}
+
+.fx-card:hover .fx-node,
+.fx-card.is-selected .fx-node {
+    opacity: .85;
+}
+
+.fx-card-corner {
+    position: absolute;
+    z-index: 45;
+    width: 10px;
+    height: 10px;
+    opacity: 0;
+    border-color: var(--accent);
+    transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.fx-card:hover .fx-card-corner,
+.fx-card.is-selected .fx-card-corner {
+    opacity: .72;
+}
+
+.fx-card-corner-tl {
+    top: 7px;
+    left: 7px;
+    border-top: 1px solid;
+    border-left: 1px solid;
+}
+
+.fx-card-corner-tr {
+    top: 7px;
+    right: 7px;
+    border-top: 1px solid;
+    border-right: 1px solid;
+}
+
+.fx-card-corner-bl {
+    bottom: 7px;
+    left: 7px;
+    border-bottom: 1px solid;
+    border-left: 1px solid;
+}
+
+.fx-card-corner-br {
+    bottom: 7px;
+    right: 7px;
+    border-bottom: 1px solid;
+    border-right: 1px solid;
+}
+
+.fx-card:hover .fx-card-corner-tl,
+.fx-card.is-selected .fx-card-corner-tl {
+    transform: translate(-2px, -2px);
+}
+
+.fx-card:hover .fx-card-corner-tr,
+.fx-card.is-selected .fx-card-corner-tr {
+    transform: translate(2px, -2px);
+}
+
+.fx-card:hover .fx-card-corner-bl,
+.fx-card.is-selected .fx-card-corner-bl {
+    transform: translate(-2px, 2px);
+}
+
+.fx-card:hover .fx-card-corner-br,
+.fx-card.is-selected .fx-card-corner-br {
+    transform: translate(2px, 2px);
+}
+
+.fx-card > *:not(.fx-frame):not(.fx-rail):not(.fx-edge):not(.fx-orbit):not(.fx-node):not(.fx-card-corner):not(.fx-card-focus) {
+    position: relative;
+    z-index: 10;
+}
+
+.extqli-monitor-card.is-selected,
+.extqli-agent-card.is-selected {
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 143, 42, .22),
+        0 16px 40px rgba(0, 0, 0, .34),
+        0 0 22px rgba(255, 143, 42, .08) !important;
+}
+
+.extqli-monitor-card.is-selected.fx-selected-pop,
+.extqli-agent-card.is-selected.fx-selected-pop {
+    animation: none !important;
+}
+
+.extqli-monitor-card.is-selected .extqli-card-title::before,
+.extqli-agent-card.is-selected .extqli-card-title::before,
+.extqli-status-badge::before,
+.marker-dot {
+    animation: none !important;
+    transform: none !important;
+}
+
+.fx-preview {
+    position: relative;
+    isolation: isolate;
+}
+
+.fx-preview-frame {
+    position: absolute;
+    inset: 0;
+    z-index: 7;
+    pointer-events: none;
+    opacity: 0;
+    padding: 1px;
+    background:
+        linear-gradient(90deg, rgba(255,143,42,.13), transparent 18%, transparent 82%, rgba(255,143,42,.13)),
+        linear-gradient(180deg, rgba(255,143,42,.10), transparent 20%, transparent 80%, rgba(255,143,42,.10));
+    mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+    -webkit-mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    transition: opacity 160ms ease;
+}
+
+.fx-card:hover .fx-preview-frame,
+.fx-card.is-selected .fx-preview-frame {
+    opacity: .7;
+}
+
+.fx-preview-depth {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    pointer-events: none;
+    opacity: 0;
+    background:
+        radial-gradient(circle at 20% 20%, rgba(255, 143, 42, .07), transparent 28%),
+        radial-gradient(circle at 80% 80%, rgba(109, 176, 255, .05), transparent 32%);
+    transition: opacity 160ms ease;
+}
+
+.fx-card:hover .fx-preview-depth,
+.fx-card.is-selected .fx-preview-depth {
+    opacity: .9;
+}
+
+.fx-preview-scan,
+.fx-preview-noise,
+.extqli-preview-wrapper::after,
+.extqli-preview-wrapper::before,
+.agent-admin-tab.is-active::after,
+.extqli-remote-bar::after,
+.fx-ripple,
+.fx-counter-pulse {
+    display: none !important;
+    animation: none !important;
+}
+
+.fx-ripple-host {
+    position: relative;
+    overflow: hidden;
+}
+
+.fx-panel-enter {
+    animation: fxPanelEnter 240ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+@keyframes fxPanelEnter {
+    0% {
+        opacity: 0;
+        transform: translateY(5px);
+        filter: blur(2px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+        filter: blur(0);
+    }
+}
+
+.matrix-label {
+    border-left-color: var(--accent);
+}
+
+.fx-reduced-motion *,
+.fx-reduced-motion *::before,
+.fx-reduced-motion *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+}
