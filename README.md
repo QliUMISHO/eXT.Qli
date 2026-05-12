@@ -16,7 +16,7 @@ you get flagged, banned, or worse?
 that’s your responsibility, full stop  
   
 no excuses like “just testing” or “didn’t know” — that doesn’t fly in the real world  
-the dev didn’t make this to babysit you  
+I didn’t make this to babysit you. I made this to satisfy my own shit   
 it’s provided as-is, no guarantees, no safety net  
 if you misuse it and things go sideways, you’re the one holding the bag  
 
