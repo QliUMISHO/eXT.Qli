@@ -86,6 +86,96 @@ STARTED AS A JOKE. ENDED AS A THING.
 ・prevented sidebar cards and nav labels from breaking the layout
 ・kept frontend-only changes focused on appearance and rendering
 
+[2026/05/12 - SYSTEM CONFIG / NO MORE HARDCODED SERVER NONSENSE]
+・added System Configuration modal because hardcoding the Ubuntu server IP finally became cursed enough
+・added configurable scan IP / subnet field for automatic endpoint scanning
+・added configurable system port field with visible default port display
+・added TURN server configuration fields:
+  - TURN server IP
+  - TURN port
+  - TURN username
+  - TURN password
+・added TURN TCP reachability checker
+・added TURN autodiscovery attempt using detected server network address
+・added runtime status block:
+  - detected web base
+  - detected server IP
+  - current ICE mode
+・created system_config.php backend endpoint for loading/saving config
+・created frontend system-config.js module for config modal behavior
+・created system-config.css because the first modal looked too clean and not enough like the actual system
+・made API base path dynamic instead of hardcoding /eXT.Qli everywhere
+・frontend can now follow /eXT.Qli_preprod or whatever folder it is deployed under
+・added config validation before rendering endpoint cards
+・if scan subnet does not match detected server IP, cards are blocked instead of letting the UI hallucinate endpoints
+・websystem now starts cleanly with empty states when no endpoints are discovered
+・no more random startup card puke when the system has no agents yet
+・added storage path for system_config.json as temporary config persistence
+・added notes that config persistence should move fully to database because json files are the gateway drug to suffering
+
+[2026/05/12 - WEBRTC / PREVIEW STABILITY]
+・main.js stabilized around persistent WebRTC preview connections
+・screen preview connections are kept alive after Stop Viewing
+・Stop Viewing now detaches the main viewer only instead of murdering the RTCPeerConnection
+・Start Viewing can reuse existing peer stream for faster resume
+・added faster ICE gathering path with early candidate completion
+・added answer polling fast retry behavior
+・reduced pointless timeout griefing during offer/answer flow
+・kept shared viewer flow compatible with current signaling.php polling broker
+・kept preview streams alive in card grid where possible
+・reattachAllPreviewStreams() used to rebind existing streams after render
+・loadAgents() now respects config validation before fetching/rendering
+・autoConnectAgents() now stops if system config is invalid
+・clearEndpointCardsForInvalidConfig() added because sometimes the correct output is "show nothing, idiot"
+
+[2026/05/12 - UI / MODAL / CONTROL PANEL COSMETIC DAMAGE CONTROL]
+・redesigned System Configuration modal to match the actual dashboard gray panel style
+・removed the bright white corporate SaaS modal look
+・matched modal colors to dashboard panels:
+  - #1a1d21
+  - #1b1f25
+  - #171a1f
+  - gray borders
+  - muted orange accents
+・changed System Config top button from blue nav style to dashboard gray
+・adjusted modal cards, footer, input fields, buttons, and warning block
+・added viewer-controls.css for Screen Viewer controls
+・fixed ugly native agent dropdown
+・added custom dropdown arrow styling
+・fixed remote control switch overlap / bad alignment
+・made control buttons copy the endpoint card "REMOTE SCREEN" button style
+・reduced bright orange overload because apparently my eyes deserved mercy
+・screen viewer controls now match card-style gray gradients instead of looking like a separate app
+・status bar under the switch now uses the same dark card scheme
+
+[2026/05/12 - ENDPOINT CARD CLEANUP]
+・removed hover blur / glow garbage from endpoint cards
+・fixed online badge alignment inside the pill
+・added preview health badge concept for cards with broken/missing previews
+・renamed warning-style preview badge to CAUTION because "warning" sounded too OSHA
+・CAUTION badge follows the same pill family as the ONLINE badge
+・added preview validation idea:
+  - check if preview video has srcObject
+  - check if video can render frames / has dimensions
+  - if no renderable preview appears, apply CAUTION immediately
+  - if preview starts rendering, remove CAUTION automatically
+・kept endpoint card preview wrappers dark and compact
+・prevented hover effects from blurring screenshots like a haunted security camera
+
+[2026/05/12 - SECURITY / REMOVE HARDCODED CREDENTIALS FROM MAIN.JS]
+・removed hardcoded shared_token from main.js payloads
+・removed hardcoded TURN/STUN credentials from main.js
+・main.js now expects ICE config from runtime system config instead of embedding TURN creds
+・buildRtcConfiguration() now reads from:
+  - window.EXTQLI_CONFIG.buildIceServers()
+  - window.EXTQLI_SYSTEM_CONFIG.ice_servers
+  - window.EXTQLI_SYSTEM_CONFIG.stun_url
+  - window.EXTQLI_SYSTEM_CONFIG.turn_* fields
+・if no ICE servers are configured, frontend logs warning and uses host candidates only
+・save_agent_identity.php, agent_task_result.php, and delete_agent.php must stop relying on static posted tokens
+・credential ownership moved toward backend/session/database config instead of frontend JavaScript
+・lesson: if secrets are in JS, they are not secrets, they are decorations
+
 [CURRENT STATE]
 ・agent cards display logged-in username as the main title
 ・IP address displays below the username
@@ -96,25 +186,36 @@ STARTED AS A JOKE. ENDED AS A THING.
 ・UI is cleaner, more compact, and less broken on narrow windows
 ・username can appear immediately through WebRTC data channel before database refresh
 ・database persistence is available through save_agent_identity.php
-・network scanner: nmap --top-ports 1000, detect server ip, save to devices
+・~~network scanner: nmap --top-ports 1000, detect server ip, save to devices~~
 ・agent system: heartbeats every 30 sec, tasks via webrtc dc or http
 ・screen viewer: webrtc with turn relay, multi-viewer, pause/resume, remote control
-・remote control tab: cmd exec, tcp server mgmt, quick actions, task log
+・~~remote control tab: cmd exec, tcp server mgmt, quick actions, task log~~
 ・db tables: agents, agent_heartbeats, agent_tasks, agent_task_results, devices
+・System Configuration modal exists and controls scan/TURN/runtime settings
+・frontend API base path is no longer hardcoded to only /eXT.Qli
+・websystem can block card rendering when config is wrong
+・screen viewer controls now match endpoint card styling
+・main.js no longer carries static shared token / TURN credential values
 
 [UNSOLVED PECULIARITIES]
-・turn server hardcoded (if it dies, webrtc may fail across subnets)
-・signaling uses file polling (works for low volume, not scale)
+・~~system_config.json exists as temporary config persistence unless database-backed config is fully wired~~
+・TURN credential storage should be finalized in database/config backend, not exposed raw in frontend payloads forever
+・backend API endpoints must enforce server-side auth/session/database checks now that main.js no longer posts shared_token
+・signaling still uses file polling (works for low volume, not scale)
 ・task result delivery is fire-and-forget (no retry)
-・send_agent_task.php calls external go-between on port 8081 (not in files)
-・agent-share.php removed (410) – pure webrtc now
-・agents.username may stay blank if save_agent_identity.php is missing, blocked, or using the wrong shared token
+・~~send_agent_task.php calls external go-between on port 8081 (not in files)~~
+・~~agent-share.php removed (410) – pure webrtc now~~
+・agents.username may stay blank if save_agent_identity.php is missing, blocked, or not wired to the correct database/session auth
 ・WebRTC identity only arrives after data channel connection opens
 ・offline agents cannot report fresh username through data channel
-・old cached app.js can still cause confusing behavior until hard refresh
-・frontend opened from /eXT.Qli_preprod still calls backend under /eXT.Qli because the agent is configured there
-・hardcoded TURN/API values still exist and should eventually be centralized
+・old cached main.js/app.js can still cause confusing behavior until hard refresh
+・frontend opened from /eXT.Qli_preprod can still be confused if the agent itself was installed/configured against /eXT.Qli
+・preview CAUTION badge depends on actual video render validation and can false-positive during slow WebRTC startup
+・TURN TCP checker confirms port reachability, not full TURN allocation/auth correctness
+・~~server-side native viewer experiment was rolled back; browser WebRTC viewer remains the stable path for now~~
 
 [NOTES TO SELF]
 this was supposed to be simple. it never is.
+if the frontend has secrets, it already lost.
+if the card is blank, maybe it is not broken. maybe it is being honest.
 **sage**
