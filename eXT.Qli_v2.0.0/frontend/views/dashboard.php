@@ -4,8 +4,14 @@
             <section id="agentsView" class="view-panel is-active">
                 <section class="hero-card card">
                     <div class="board-brand">
-                        <div class="board-brand-title">eXT.Qli</div>
-                        <div class="board-brand-caption">Endpoint Visibility Console</div>
+                        <div>
+                            <div class="board-brand-title">eXT.Qli</div>
+                            <div class="board-brand-caption">Endpoint eXecution Terminal (EXT)</div>
+                        </div>
+
+                        <button type="button" id="openSystemConfigBtn" class="btn btn-dark btn-sm extqli-config-open-btn">
+                            System Config
+                        </button>
                     </div>
 
                     <div class="board-rule"></div>
@@ -72,9 +78,8 @@
 
                                                 <div id="extqliClientList" class="extqli-client-list">
                                                     <div class="extqli-empty">
-                                                        <div role="status" class="skeleton line"></div>
-                                                        <div role="status" class="skeleton line"></div>
-                                                        <span>Loading agents...</span>
+                                                        <strong>No endpoints detected yet.</strong>
+                                                        <span>Configure network scan settings or wait for endpoint heartbeats.</span>
                                                     </div>
                                                 </div>
                                             </aside>
@@ -91,8 +96,8 @@
 
                                                 <div id="extqliMonitorGrid" class="extqli-grid">
                                                     <div class="extqli-empty">
-                                                        <div role="status" class="skeleton box"></div>
-                                                        <span>Loading agents...</span>
+                                                        <strong>No endpoint cards yet.</strong>
+                                                        <span>The workspace will stay empty until agents are discovered.</span>
                                                     </div>
                                                 </div>
 
@@ -202,4 +207,155 @@
             </section>
         </main>
     </div>
+</div>
+
+<!-- System Configuration Modal -->
+<div id="systemConfigModal" class="extqli-config-modal" hidden>
+    <div class="extqli-config-backdrop" data-config-close></div>
+
+    <section class="extqli-config-dialog" role="dialog" aria-modal="true" aria-labelledby="systemConfigTitle">
+        <header class="extqli-config-header">
+            <div>
+                <span class="section-kicker">System Setup</span>
+                <h2 id="systemConfigTitle">System Configuration</h2>
+                <p>Configure discovery, default port, and TURN server settings here.</p>
+            </div>
+
+            <button type="button" class="extqli-config-close" data-config-close aria-label="Close configuration modal">
+                ×
+            </button>
+        </header>
+
+        <div class="extqli-config-body">
+            <section class="extqli-config-card">
+                <h3>Endpoint Discovery</h3>
+
+                <div class="extqli-config-grid">
+                    <label class="extqli-config-field">
+                        <span>IP address / subnet to scan</span>
+                        <input
+                            type="text"
+                            id="configScanIp"
+                            placeholder="Example: 10.201.0.0/24 or 10.201.0.254"
+                            autocomplete="off"
+                        >
+                        <small>Use CIDR for automatic scanning across the network.</small>
+                    </label>
+
+                    <label class="extqli-config-field">
+                        <span>System port</span>
+                        <input
+                            type="number"
+                            id="configSystemPort"
+                            min="1"
+                            max="65535"
+                            placeholder="3478"
+                            autocomplete="off"
+                        >
+                        <small>Default: <strong id="configDefaultPortText">3478</strong></small>
+                    </label>
+                </div>
+            </section>
+
+            <section class="extqli-config-card">
+                <div class="extqli-config-card-head">
+                    <div>
+                        <h3>TURN Server</h3>
+                        <p>Autodiscover TURN IP when possible. Otherwise enter the TURN server credentials here.</p>
+                    </div>
+
+                    <button type="button" id="configAutoDiscoverTurnBtn" class="btn btn-dark btn-sm">
+                        Autodiscover
+                    </button>
+                </div>
+
+                <div class="extqli-config-grid">
+                    <label class="extqli-config-field">
+                        <span>TURN server IP</span>
+                        <input
+                            type="text"
+                            id="configTurnIp"
+                            placeholder="Example: 10.201.0.254"
+                            autocomplete="off"
+                        >
+                    </label>
+
+                    <label class="extqli-config-field">
+                        <span>TURN port</span>
+                        <input
+                            type="number"
+                            id="configTurnPort"
+                            min="1"
+                            max="65535"
+                            placeholder="3478"
+                            autocomplete="off"
+                        >
+                    </label>
+
+                    <label class="extqli-config-field">
+                        <span>TURN username</span>
+                        <input
+                            type="text"
+                            id="configTurnUser"
+                            placeholder="TURN username"
+                            autocomplete="off"
+                        >
+                    </label>
+
+                    <label class="extqli-config-field">
+                        <span>TURN password</span>
+                        <input
+                            type="password"
+                            id="configTurnPass"
+                            placeholder="TURN password"
+                            autocomplete="new-password"
+                        >
+                    </label>
+                </div>
+
+                <div class="extqli-config-actions-row">
+                    <button type="button" id="configCheckTurnBtn" class="btn btn-dark btn-sm">
+                        Check TURN Connection
+                    </button>
+
+                    <div id="configTurnStatus" class="extqli-config-status">
+                        TURN status not checked yet.
+                    </div>
+                </div>
+            </section>
+
+            <section class="extqli-config-card">
+                <h3>Runtime Status</h3>
+
+                <div class="extqli-config-runtime">
+                    <div>
+                        <span>Detected web base</span>
+                        <strong id="configRuntimeBase">—</strong>
+                    </div>
+                    <div>
+                        <span>Detected server IP</span>
+                        <strong id="configRuntimeServerIp">—</strong>
+                    </div>
+                    <div>
+                        <span>Current ICE mode</span>
+                        <strong id="configRuntimeIce">—</strong>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <footer class="extqli-config-footer">
+            <div id="configSaveStatus" class="extqli-config-save-status">
+                Ready.
+            </div>
+
+            <button type="button" class="btn btn-dark" data-config-close>
+                Cancel
+            </button>
+
+            <button type="button" id="saveSystemConfigBtn" class="btn btn-primary">
+                Save Configuration
+            </button>
+        </footer>
+    </section>
 </div>

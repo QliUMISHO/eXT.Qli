@@ -4,7 +4,7 @@ import { appState } from './modules/store.js';
 (function () {
     'use strict';
 
-    var BASE_PATH = window.EXTQLI_API_BASE_PATH || '/eXT.Qli';
+    var BASE_PATH = window.EXTQLI_API_BASE_PATH || '/eXT.Qli_preprod';
     var SIGNALING_URL = BASE_PATH + '/backend/api/signaling.php';
     var VIEWER_ID = 'viewer-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
 
@@ -35,10 +35,12 @@ import { appState } from './modules/store.js';
     };
 
     var EXTQLI_AUTO_CONNECT_ALL = true;
-    var EXTQLI_ICE_GATHER_TIMEOUT_MS = 2500;
-    var EXTQLI_ANSWER_POLL_INTERVAL_MS = 350;
-    var EXTQLI_ANSWER_POLL_TIMEOUT_MS = 18000;
-    var EXTQLI_AUTOCONNECT_DELAY_MS = 350;
+
+    var EXTQLI_ICE_GATHER_TIMEOUT_MS = 900;
+    var EXTQLI_ICE_FAST_FIRST_CANDIDATE_MS = 180;
+    var EXTQLI_ANSWER_POLL_INTERVAL_MS = 180;
+    var EXTQLI_ANSWER_POLL_TIMEOUT_MS = 22000;
+    var EXTQLI_AUTOCONNECT_DELAY_MS = 120;
 
     var autoConnectQueue = [];
     var autoConnectActive = false;
@@ -80,6 +82,40 @@ import { appState } from './modules/store.js';
         }
 
         return text;
+    }
+
+    function isSystemConfigValid() {
+        if (window.EXTQLI_CONFIG && typeof window.EXTQLI_CONFIG.isValid === 'function') {
+            return !!window.EXTQLI_CONFIG.isValid();
+        }
+
+        if (typeof window.EXTQLI_SYSTEM_CONFIG_VALID === 'boolean') {
+            return window.EXTQLI_SYSTEM_CONFIG_VALID;
+        }
+
+        return true;
+    }
+
+    function getSystemConfigValidation() {
+        if (window.EXTQLI_CONFIG && typeof window.EXTQLI_CONFIG.validation === 'function') {
+            return window.EXTQLI_CONFIG.validation();
+        }
+
+        return window.EXTQLI_SYSTEM_CONFIG_VALIDATION || {
+            valid: true,
+            errors: [],
+            warnings: []
+        };
+    }
+
+    function getSystemConfigErrorMessage() {
+        var validation = getSystemConfigValidation();
+
+        if (validation && validation.errors && validation.errors.length) {
+            return validation.errors[0];
+        }
+
+        return 'System configuration is invalid. Open System Config and correct the scan/TURN settings.';
     }
 
     function extractUsernameFromIdentityPayload(payload) {
@@ -155,8 +191,8 @@ import { appState } from './modules/store.js';
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             },
+            cache: 'no-store',
             body: JSON.stringify({
-                shared_token: 'extqli_@2026token$$',
                 agent_uuid: agentUuid,
                 username: username,
                 logged_in_username: username,
@@ -175,7 +211,7 @@ import { appState } from './modules/store.js';
                 }
 
                 extqliPersistedIdentityByAgentUuid[agentUuid] = username;
-                console.log('[DEBUG] Agent username stored in MySQL:', agentUuid, username);
+                console.log('[DEBUG] Agent username stored in database:', agentUuid, username);
             })
             .catch(function (err) {
                 console.warn('[DEBUG] Agent username save failed:', agentUuid, err && err.message ? err.message : err);
@@ -274,8 +310,8 @@ import { appState } from './modules/store.js';
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             },
+            cache: 'no-store',
             body: JSON.stringify({
-                shared_token: 'extqli_@2026token$$',
                 agent_uuid: agentUuid,
                 task_id: taskId,
                 result_status: resultPayload.result_status || 'success',
@@ -514,21 +550,39 @@ import { appState } from './modules/store.js';
     }
 
     function buildRtcConfiguration() {
-        var TURN_SERVER = 'turn:10.201.0.254:3478?transport=tcp';
-        var TURN_USERNAME = 'tachyon';
-        var TURN_CREDENTIAL = 'TachyonDragon107';
+        var iceServers = [];
+
+        if (window.EXTQLI_CONFIG && typeof window.EXTQLI_CONFIG.buildIceServers === 'function') {
+            iceServers = window.EXTQLI_CONFIG.buildIceServers();
+        } else if (window.EXTQLI_SYSTEM_CONFIG) {
+            var cfg = window.EXTQLI_SYSTEM_CONFIG;
+
+            if (Array.isArray(cfg.ice_servers)) {
+                iceServers = cfg.ice_servers;
+            } else {
+                if (cfg.stun_url) {
+                    iceServers.push({
+                        urls: cfg.stun_url
+                    });
+                }
+
+                if (cfg.turn_ip && cfg.turn_port && cfg.turn_username) {
+                    iceServers.push({
+                        urls: 'turn:' + cfg.turn_ip + ':' + cfg.turn_port + '?transport=tcp',
+                        username: cfg.turn_username,
+                        credential: cfg.turn_password || ''
+                    });
+                }
+            }
+        }
+
+        if (!Array.isArray(iceServers) || iceServers.length === 0) {
+            console.warn('[DEBUG] No ICE servers configured. WebRTC will use host candidates only.');
+            iceServers = [];
+        }
 
         return {
-            iceServers: [
-                {
-                    urls: 'stun:stun.l.google.com:19302'
-                },
-                {
-                    urls: TURN_SERVER,
-                    username: TURN_USERNAME,
-                    credential: TURN_CREDENTIAL
-                }
-            ],
+            iceServers: iceServers,
             iceTransportPolicy: 'all',
             bundlePolicy: 'max-bundle',
             rtcpMuxPolicy: 'require'
@@ -558,6 +612,10 @@ import { appState } from './modules/store.js';
     function safePlayVideo(video, label) {
         if (!video) return;
 
+        video.muted = true;
+        video.autoplay = true;
+        video.playsInline = true;
+
         var playPromise = video.play();
 
         if (playPromise && typeof playPromise.catch === 'function') {
@@ -574,10 +632,10 @@ import { appState } from './modules/store.js';
         var video = getGridPreviewVideo(agentUuid);
 
         if (!video) {
-            if (retryCount < 10) {
+            if (retryCount < 14) {
                 setTimeout(function () {
                     setPreviewVideoStream(agentUuid, stream, retryCount + 1);
-                }, 120);
+                }, 70);
             }
 
             return;
@@ -586,6 +644,7 @@ import { appState } from './modules/store.js';
         if (video.srcObject === stream) {
             video.style.display = 'block';
             setPreviewOverlayState(agentUuid, true, '');
+            safePlayVideo(video, 'Preview video play error for ' + agentUuid);
             return;
         }
 
@@ -670,6 +729,7 @@ import { appState } from './modules/store.js';
         if (peer) {
             peer.stream = stream;
             peer.connectionReady = true;
+            peer.creating = false;
         }
 
         setPreviewVideoStream(agentUuid, stream);
@@ -700,6 +760,7 @@ import { appState } from './modules/store.js';
                 peer.pc.onconnectionstatechange = null;
                 peer.pc.oniceconnectionstatechange = null;
                 peer.pc.onicecandidate = null;
+                peer.pc.onicegatheringstatechange = null;
                 peer.pc.close();
             }
         } catch (err) {}
@@ -718,6 +779,18 @@ import { appState } from './modules/store.js';
         return new Promise(function (resolve) {
             var done = false;
             var timer = null;
+            var fastTimer = null;
+            var sawCandidate = false;
+
+            function localSdpHasCandidate() {
+                return !!(
+                    peer &&
+                    peer.pc &&
+                    peer.pc.localDescription &&
+                    peer.pc.localDescription.sdp &&
+                    peer.pc.localDescription.sdp.indexOf('a=candidate:') !== -1
+                );
+            }
 
             function finish(reason) {
                 if (done) return;
@@ -726,6 +799,10 @@ import { appState } from './modules/store.js';
 
                 if (timer) {
                     clearTimeout(timer);
+                }
+
+                if (fastTimer) {
+                    clearTimeout(fastTimer);
                 }
 
                 console.log('[DEBUG] ICE gather finished:', reason);
@@ -742,6 +819,21 @@ import { appState } from './modules/store.js';
                 return;
             }
 
+            if (localSdpHasCandidate()) {
+                finish('local candidate already present');
+                return;
+            }
+
+            peer.pc.onicecandidate = function (event) {
+                if (event.candidate) {
+                    sawCandidate = true;
+                    console.log('[DEBUG] ICE candidate:', event.candidate.candidate);
+                } else {
+                    console.log('[DEBUG] ICE gathering completed');
+                    finish('complete candidate event');
+                }
+            };
+
             peer.pc.onicegatheringstatechange = function () {
                 if (!peer.pc) {
                     finish('peer closed');
@@ -753,6 +845,12 @@ import { appState } from './modules/store.js';
                 }
             };
 
+            fastTimer = setTimeout(function () {
+                if (sawCandidate || localSdpHasCandidate()) {
+                    finish('first candidate fast path');
+                }
+            }, EXTQLI_ICE_FAST_FIRST_CANDIDATE_MS);
+
             timer = setTimeout(function () {
                 finish('fast timeout');
             }, EXTQLI_ICE_GATHER_TIMEOUT_MS);
@@ -761,6 +859,7 @@ import { appState } from './modules/store.js';
 
     function pollForAnswer(agentUuid, peer) {
         var startedAt = Date.now();
+        var pollInProgress = false;
 
         if (peer.answerPollInterval) {
             clearInterval(peer.answerPollInterval);
@@ -783,6 +882,8 @@ import { appState } from './modules/store.js';
         }
 
         async function pollOnce() {
+            if (pollInProgress) return;
+
             if (!peer || !peer.pc) {
                 stopPolling();
                 return;
@@ -795,6 +896,9 @@ import { appState } from './modules/store.js';
 
             if (Date.now() - startedAt > EXTQLI_ANSWER_POLL_TIMEOUT_MS) {
                 stopPolling();
+
+                peer.creating = false;
+
                 console.warn('[DEBUG] Answer poll timeout for', agentUuid);
 
                 if (agentUuid === extqliCurrentScreenAgentUuid) {
@@ -803,6 +907,8 @@ import { appState } from './modules/store.js';
 
                 return;
             }
+
+            pollInProgress = true;
 
             try {
                 var pollResp = await fetch(SIGNALING_URL + '?action=poll_answer&viewer_id=' + encodeURIComponent(VIEWER_ID) + '&_=' + Date.now(), {
@@ -835,10 +941,14 @@ import { appState } from './modules/store.js';
                 }
             } catch (err) {
                 console.error('[DEBUG] Answer poll error:', err);
+            } finally {
+                pollInProgress = false;
             }
         }
 
         pollOnce();
+        setTimeout(pollOnce, 80);
+
         peer.answerPollInterval = setInterval(pollOnce, EXTQLI_ANSWER_POLL_INTERVAL_MS);
         peer.answerPollTimeout = setTimeout(function () {
             stopPolling();
@@ -852,6 +962,11 @@ import { appState } from './modules/store.js';
             throw new Error('Missing agent UUID.');
         }
 
+        if (!isSystemConfigValid()) {
+            clearEndpointCardsForInvalidConfig(getSystemConfigErrorMessage());
+            throw new Error(getSystemConfigErrorMessage());
+        }
+
         console.log('[DEBUG] createWebRTCOffer called for agent:', agentUuid);
 
         var existing = extqliViewerPeers[agentUuid];
@@ -859,6 +974,12 @@ import { appState } from './modules/store.js';
         if (existing && existing.pc) {
             if (existing.stream || isConnectionAlive(agentUuid)) {
                 console.log('[DEBUG] Connection already alive for', agentUuid);
+
+                if (existing.stream) {
+                    setPreviewVideoStream(agentUuid, existing.stream);
+                    attachStreamToActiveViewer(agentUuid);
+                }
+
                 return existing;
             }
 
@@ -902,6 +1023,10 @@ import { appState } from './modules/store.js';
                     peer.creating = false;
                     updateLiveCounts();
                     attachStreamToActiveViewer(agentUuid);
+
+                    if (peer.stream) {
+                        setPreviewVideoStream(agentUuid, peer.stream);
+                    }
                 }
 
                 if (peer.pc.connectionState === 'failed') {
@@ -937,6 +1062,10 @@ import { appState } from './modules/store.js';
                     peer.creating = false;
                     updateLiveCounts();
                     attachStreamToActiveViewer(agentUuid);
+
+                    if (peer.stream) {
+                        setPreviewVideoStream(agentUuid, peer.stream);
+                    }
                 }
 
                 if (peer.pc.iceConnectionState === 'failed') {
@@ -950,14 +1079,6 @@ import { appState } from './modules/store.js';
                     }
 
                     clearPreviewVideoStream(agentUuid, 'ICE failed');
-                }
-            };
-
-            peer.pc.onicecandidate = function (event) {
-                if (event.candidate) {
-                    console.log('[DEBUG] ICE candidate:', event.candidate.candidate);
-                } else {
-                    console.log('[DEBUG] ICE gathering completed');
                 }
             };
 
@@ -1068,6 +1189,11 @@ import { appState } from './modules/store.js';
         if (autoConnectActive) return;
         if (autoConnectQueue.length === 0) return;
 
+        if (!isSystemConfigValid()) {
+            clearEndpointCardsForInvalidConfig(getSystemConfigErrorMessage());
+            return;
+        }
+
         autoConnectActive = true;
 
         var agentUuid = autoConnectQueue.shift();
@@ -1091,6 +1217,11 @@ import { appState } from './modules/store.js';
     function autoConnectAgents() {
         if (!EXTQLI_AUTO_CONNECT_ALL) return;
 
+        if (!isSystemConfigValid()) {
+            clearEndpointCardsForInvalidConfig(getSystemConfigErrorMessage());
+            return;
+        }
+
         var onlineAgents = extqliAgentsList.filter(function (a) {
             return a && a.is_online && a.agent_uuid && !extqliViewerPeers[a.agent_uuid] && !extqliConnectionPromises[a.agent_uuid];
         });
@@ -1111,8 +1242,8 @@ import { appState } from './modules/store.js';
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             },
+            cache: 'no-store',
             body: JSON.stringify({
-                shared_token: 'extqli_@2026token$$',
                 agent_uuid: agentUuid
             })
         })
@@ -1172,7 +1303,11 @@ import { appState } from './modules/store.js';
         if (!container) return;
 
         if (!list.length) {
-            container.innerHTML = '<div class="extqli-empty">No agents connected.</div>';
+            container.innerHTML =
+                '<div class="extqli-empty">' +
+                    '<strong>No endpoints detected yet.</strong>' +
+                    '<span>Configure network scan settings or wait for endpoint heartbeats.</span>' +
+                '</div>';
             return;
         }
 
@@ -1290,7 +1425,11 @@ import { appState } from './modules/store.js';
         if (!container) return;
 
         if (!list.length) {
-            container.innerHTML = '<div class="extqli-empty">No agents to display.</div>';
+            container.innerHTML =
+                '<div class="extqli-empty">' +
+                    '<strong>No endpoint cards yet.</strong>' +
+                    '<span>The workspace will stay empty until agents are discovered.</span>' +
+                '</div>';
             return;
         }
 
@@ -1341,10 +1480,67 @@ import { appState } from './modules/store.js';
         }
     }
 
+    function clearEndpointCardsForInvalidConfig(message) {
+        message = message || 'System configuration is invalid. Open System Config and correct the scan/TURN settings.';
+
+        extqliAgentsList = [];
+        appState.agents = [];
+
+        Object.keys(extqliViewerPeers).forEach(function (agentUuid) {
+            cleanupPeer(agentUuid, true, 'Config invalid');
+        });
+
+        autoConnectQueue = [];
+        autoConnectActive = false;
+
+        var sidebar = byId('extqliClientList');
+        var grid = byId('extqliMonitorGrid');
+        var select = byId('screenAgentSelect');
+        var remoteToggle = byId('remoteControlToggle');
+
+        if (sidebar) {
+            sidebar.innerHTML =
+                '<div class="extqli-empty">' +
+                    '<strong>No endpoints shown.</strong>' +
+                    '<span>' + escapeHtml(message) + '</span>' +
+                '</div>';
+        }
+
+        if (grid) {
+            grid.innerHTML =
+                '<div class="extqli-empty">' +
+                    '<strong>Endpoint cards blocked.</strong>' +
+                    '<span>' + escapeHtml(message) + '</span>' +
+                '</div>';
+        }
+
+        if (select) {
+            select.innerHTML = '<option value="">Config invalid</option>';
+        }
+
+        if (remoteToggle) {
+            remoteToggle.checked = false;
+        }
+
+        extqliCurrentScreenAgentUuid = '';
+        extqliIsScreenViewing = false;
+        extqliRemoteControlEnabled = false;
+
+        updateRemoteOverlay();
+        updateLiveCounts();
+        setScreenStatus(message);
+        showScreenEmptyState(true);
+    }
+
     function populateScreenAgentOptions(list) {
         var select = byId('screenAgentSelect');
 
         if (!select) return;
+
+        if (!isSystemConfigValid()) {
+            select.innerHTML = '<option value="">Config invalid</option>';
+            return;
+        }
 
         var current = extqliCurrentScreenAgentUuid || select.value || '';
         var options = ['<option value="">Select an agent</option>'];
@@ -1364,6 +1560,11 @@ import { appState } from './modules/store.js';
     }
 
     function renderAgents(list) {
+        if (!isSystemConfigValid()) {
+            clearEndpointCardsForInvalidConfig(getSystemConfigErrorMessage());
+            return;
+        }
+
         extqliAgentsList = Array.isArray(list) ? list : [];
         appState.agents = extqliAgentsList;
 
@@ -1392,6 +1593,11 @@ import { appState } from './modules/store.js';
     }
 
     function loadAgents() {
+        if (!isSystemConfigValid()) {
+            clearEndpointCardsForInvalidConfig(getSystemConfigErrorMessage());
+            return;
+        }
+
         fetch(BASE_PATH + '/backend/api/agents.php?_=' + Date.now(), {
             method: 'GET',
             headers: {
@@ -1411,6 +1617,7 @@ import { appState } from './modules/store.js';
             })
             .catch(function (err) {
                 setAgentStatus('Agent load error: ' + err.message);
+                renderAgents([]);
             });
     }
 
@@ -1445,15 +1652,7 @@ import { appState } from './modules/store.js';
     }
 
     function stopScreenView() {
-        console.log('[DEBUG] stopScreenView — pausing feed, keeping connection for:', extqliCurrentScreenAgentUuid);
-
-        var peer = activeViewerPeer();
-
-        if (peer && peer.dataChannel && peer.dataChannel.readyState === 'open') {
-            peer.dataChannel.send(JSON.stringify({
-                type: 'pause_video'
-            }));
-        }
+        console.log('[DEBUG] stopScreenView — detaching main viewer only, keeping preview stream alive for:', extqliCurrentScreenAgentUuid);
 
         var videoEl = byId('remoteScreenVideo');
 
@@ -1476,12 +1675,18 @@ import { appState } from './modules/store.js';
         }
 
         updateRemoteOverlay();
-        setScreenStatus('Feed paused — connection kept alive. Click Start Viewing to resume instantly.');
+        reattachAllPreviewStreams();
+        setScreenStatus('Viewer stopped — screen preview connection kept alive. Click Start Viewing to resume instantly.');
         showScreenEmptyState(true);
     }
 
     function startScreenView() {
         console.log('[DEBUG] startScreenView called');
+
+        if (!isSystemConfigValid()) {
+            clearEndpointCardsForInvalidConfig(getSystemConfigErrorMessage());
+            return;
+        }
 
         var select = byId('screenAgentSelect');
         var agentUuid = select ? select.value : '';
@@ -1523,10 +1728,10 @@ import { appState } from './modules/store.js';
                         setScreenStatus(extqliRemoteControlEnabled ? 'Streaming active — Remote Control ON' : 'Streaming active');
                     } else if (peer.pc && (peer.pc.connectionState === 'failed' || peer.pc.iceConnectionState === 'failed')) {
                         clearInterval(checkInterval);
-                    } else if (checks > 60) {
+                    } else if (checks > 80) {
                         clearInterval(checkInterval);
                     }
-                }, 250);
+                }, 180);
             })
             .catch(function (err) {
                 console.error('[DEBUG] createWebRTCOffer error:', err);
@@ -1788,6 +1993,11 @@ import { appState } from './modules/store.js';
     }
 
     function openScreenViewer(agentUuid) {
+        if (!isSystemConfigValid()) {
+            clearEndpointCardsForInvalidConfig(getSystemConfigErrorMessage());
+            return;
+        }
+
         activateView('agentsView', 'screen');
 
         extqliCurrentScreenAgentUuid = agentUuid || '';
@@ -1802,6 +2012,7 @@ import { appState } from './modules/store.js';
         updateRemoteTargetDisplay(agentUuid, false);
 
         if (isConnectionAlive(agentUuid) || (extqliViewerPeers[agentUuid] && extqliViewerPeers[agentUuid].stream)) {
+            reattachAllPreviewStreams();
             setScreenStatus('Live connection ready — click Start Viewing to resume instantly.');
         } else {
             setScreenStatus('Selected agent. Preparing connection...');
@@ -1812,6 +2023,11 @@ import { appState } from './modules/store.js';
     }
 
     function openRemoteScreen(agentUuid) {
+        if (!isSystemConfigValid()) {
+            clearEndpointCardsForInvalidConfig(getSystemConfigErrorMessage());
+            return;
+        }
+
         activateView('agentsView', 'screen');
 
         extqliCurrentScreenAgentUuid = agentUuid || '';
@@ -1859,10 +2075,10 @@ import { appState } from './modules/store.js';
                         setScreenStatus('Streaming active — Remote Control ON');
                     } else if (peer.pc && (peer.pc.connectionState === 'failed' || peer.pc.iceConnectionState === 'failed')) {
                         clearInterval(checkInterval);
-                    } else if (checks > 72) {
+                    } else if (checks > 90) {
                         clearInterval(checkInterval);
                     }
-                }, 250);
+                }, 180);
             })
             .catch(function (err) {
                 console.error('[DEBUG] createWebRTCOffer error:', err);
@@ -1889,6 +2105,11 @@ import { appState } from './modules/store.js';
 
         if (screenSelect) {
             screenSelect.addEventListener('change', function () {
+                if (!isSystemConfigValid()) {
+                    clearEndpointCardsForInvalidConfig(getSystemConfigErrorMessage());
+                    return;
+                }
+
                 if (extqliIsScreenViewing) {
                     stopScreenView();
                 }
@@ -1904,6 +2125,7 @@ import { appState } from './modules/store.js';
 
                 if (extqliCurrentScreenAgentUuid) {
                     if (isConnectionAlive(extqliCurrentScreenAgentUuid) || (extqliViewerPeers[extqliCurrentScreenAgentUuid] && extqliViewerPeers[extqliCurrentScreenAgentUuid].stream)) {
+                        reattachAllPreviewStreams();
                         setScreenStatus('Agent selected — live connection ready. Click Start Viewing to resume instantly.');
                     } else {
                         setScreenStatus('Agent selected. Preparing connection...');
@@ -1939,6 +2161,12 @@ import { appState } from './modules/store.js';
 
         if (remoteToggle) {
             remoteToggle.addEventListener('change', function () {
+                if (!isSystemConfigValid()) {
+                    remoteToggle.checked = false;
+                    clearEndpointCardsForInvalidConfig(getSystemConfigErrorMessage());
+                    return;
+                }
+
                 extqliRemoteControlEnabled = remoteToggle.checked;
                 updateRemoteOverlay();
 
@@ -1949,6 +2177,25 @@ import { appState } from './modules/store.js';
                 );
             });
         }
+    }
+
+    function bindConfigEvents() {
+        window.addEventListener('extqli:config-updated', function (event) {
+            var validation = event.detail && event.detail.validation ? event.detail.validation : null;
+
+            if (validation && !validation.valid) {
+                clearEndpointCardsForInvalidConfig((validation.errors && validation.errors[0]) || 'System configuration is invalid.');
+                return;
+            }
+
+            loadAgents();
+        });
+
+        window.addEventListener('extqli:config-invalid', function (event) {
+            var validation = event.detail && event.detail.validation ? event.detail.validation : null;
+
+            clearEndpointCardsForInvalidConfig((validation && validation.errors && validation.errors[0]) || 'System configuration is invalid.');
+        });
     }
 
     function bindNavigation() {
@@ -1964,16 +2211,29 @@ import { appState } from './modules/store.js';
 
         bindNavigation();
         bindEvents();
+        bindConfigEvents();
         initRemoteControl();
 
         setScreenStatus('Waiting for a selected agent.');
         activateView('agentsView');
         activateAgentAdminTab('agents');
 
-        loadAgents();
+        if (!isSystemConfigValid()) {
+            clearEndpointCardsForInvalidConfig(getSystemConfigErrorMessage());
+        } else {
+            loadAgents();
+        }
+
         showScreenEmptyState(true);
 
-        extqliAgentPollTimer = setInterval(loadAgents, 5000);
+        extqliAgentPollTimer = setInterval(function () {
+            if (!isSystemConfigValid()) {
+                clearEndpointCardsForInvalidConfig(getSystemConfigErrorMessage());
+                return;
+            }
+
+            loadAgents();
+        }, 5000);
 
         hidePageLoader();
     });

@@ -1,0 +1,19 @@
+#extqliRemoteStatus {
+    display: none !important;
+}
+
+#extqliRemoteStatus.extqli-remote-visible {
+    display: flex !important;
+}
+
+#extqliRemoteStatus.extqli-remote-hidden {
+    display: none !important;
+}
+
+.extqli-remote-bar.extqli-remote-visible {
+    display: flex !important;
+}
+
+.extqli-remote-bar.extqli-remote-hidden {
+    display: none !important;
+}

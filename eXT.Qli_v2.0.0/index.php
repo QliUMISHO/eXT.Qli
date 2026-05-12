@@ -5,7 +5,18 @@ if ($pageBase === '' || $pageBase === '.') {
     $pageBase = '/eXT.Qli_preprod';
 }
 
-$apiBase = '/eXT.Qli';
+$apiBase = $pageBase;
+
+$configFile = __DIR__ . '/backend/storage/system_config.json';
+$runtimeConfig = [];
+
+if (is_file($configFile)) {
+    $decoded = json_decode((string) file_get_contents($configFile), true);
+
+    if (is_array($decoded)) {
+        $runtimeConfig = $decoded;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -17,14 +28,20 @@ $apiBase = '/eXT.Qli';
     <link rel="stylesheet" href="https://unpkg.com/@knadh/oat/oat.min.css">
     <script src="https://unpkg.com/@knadh/oat/oat.min.js" defer></script>
 
-    <link rel="stylesheet" href="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/css/app.css?v=base-6">
-    <link rel="stylesheet" href="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/css/elements/cards.css?v=cards-7">
-    <link rel="stylesheet" href="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/css/elements/animations.css?v=animations-5">
-    <link rel="stylesheet" href="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/css/elements/remote-status.css?v=remote-status-1">
+    <link rel="stylesheet" href="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/css/app.css?v=base-8">
+    <link rel="stylesheet" href="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/css/elements/cards.css?v=cards-9">
+    <link rel="stylesheet" href="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/css/elements/animations.css?v=animations-7">
+    <link rel="stylesheet" href="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/css/elements/remote-status.css?v=remote-status-3">
+    <link rel="stylesheet" href="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/css/elements/system-config.css?v=system-config-5">
+    <link rel="stylesheet" href="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/css/elements/viewer-controls.css?v=viewer-controls-1">
 
     <script>
         window.EXTQLI_API_BASE_PATH = <?= json_encode($apiBase, JSON_UNESCAPED_SLASHES) ?>;
+        window.EXTQLI_PAGE_BASE_PATH = <?= json_encode($pageBase, JSON_UNESCAPED_SLASHES) ?>;
+        window.EXTQLI_SYSTEM_CONFIG = <?= json_encode($runtimeConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
     </script>
+
+    <script src="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/js/modules/system-config.js?v=system-config-5"></script>
 </head>
 <body>
     <div id="pageLoader" class="page-loader" aria-live="polite">
@@ -37,9 +54,9 @@ $apiBase = '/eXT.Qli';
 
     <?php require __DIR__ . '/frontend/views/dashboard.php'; ?>
 
-    <script type="module" src="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/js/main.js?v=main-6"></script>
-    <script src="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/js/endpoint-cards.js?v=endpoint-cards-6" defer></script>
-    <script src="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/js/modules/animations.js?v=animations-5" defer></script>
-    <script src="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/js/modules/remote-status-ui.js?v=remote-status-1" defer></script>
+    <script type="module" src="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/js/main.js?v=main-9"></script>
+    <script src="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/js/endpoint-cards.js?v=endpoint-cards-8" defer></script>
+    <script src="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/js/modules/animations.js?v=animations-7" defer></script>
+    <script src="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/js/modules/remote-status-ui.js?v=remote-status-3" defer></script>
 </body>
 </html>

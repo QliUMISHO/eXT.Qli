@@ -1,0 +1,508 @@
+/* =========================================================
+   eXT.Qli — System Configuration Modal
+   Matched to dashboard gray panel color/style
+   ========================================================= */
+
+.extqli-config-open {
+    overflow: hidden;
+}
+
+/* Top SYSTEM CONFIG button — same gray as dashboard panels */
+.extqli-config-open-btn {
+    white-space: nowrap;
+    height: 30px;
+    border: 1px solid #39414c !important;
+    border-radius: 4px !important;
+    background: #1b1f25 !important;
+    color: #f8fafc !important;
+    font-size: 9px !important;
+    font-weight: 900 !important;
+    text-transform: uppercase;
+    letter-spacing: .02em;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .035),
+        0 1px 0 rgba(0, 0, 0, .45);
+}
+
+.extqli-config-open-btn:hover {
+    border-color: #f97316 !important;
+    background: #22272f !important;
+    color: #ffffff !important;
+}
+
+/* =========================================================
+   Modal shell
+   ========================================================= */
+
+.extqli-config-modal[hidden] {
+    display: none !important;
+}
+
+.extqli-config-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 50000;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    font-family: inherit;
+}
+
+.extqli-config-backdrop {
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(circle at 50% 0%, rgba(249, 115, 22, .075), transparent 30%),
+        rgba(12, 17, 24, .78);
+    backdrop-filter: blur(7px);
+}
+
+/* =========================================================
+   Main dialog — same gray tone as dashboard panels
+   ========================================================= */
+
+.extqli-config-dialog {
+    position: relative;
+    z-index: 1;
+    width: min(1120px, calc(100vw - 42px));
+    max-height: calc(100vh - 42px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+
+    border-radius: 7px;
+    background: #1a1d21;
+    border: 1px solid #39414c;
+    color: #d7dee8;
+
+    box-shadow:
+        0 28px 90px rgba(0, 0, 0, .58),
+        inset 0 1px 0 rgba(255, 255, 255, .035);
+}
+
+/* =========================================================
+   Header
+   ========================================================= */
+
+.extqli-config-header {
+    padding: 22px 24px 18px;
+    border-bottom: 1px solid #343b45;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    background: #1a1d21;
+}
+
+.extqli-config-header .section-kicker {
+    color: #f97316;
+    letter-spacing: .18em;
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: 9px;
+    line-height: 1;
+}
+
+.extqli-config-header h2 {
+    margin: 9px 0 5px;
+    color: #f8fafc;
+    font-size: 22px;
+    line-height: 1.05;
+    font-weight: 900;
+    letter-spacing: -.055em;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, .65);
+}
+
+.extqli-config-header p {
+    margin: 0;
+    color: #8b98aa;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.45;
+}
+
+/* =========================================================
+   Close button
+   ========================================================= */
+
+.extqli-config-close {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    border: 1px solid #343b45;
+    border-radius: 999px;
+    background: #181b20;
+    color: #aab4c2;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    transition:
+        background .14s ease,
+        color .14s ease,
+        transform .14s ease,
+        border-color .14s ease;
+}
+
+.extqli-config-close:hover {
+    background: #232830;
+    border-color: #f97316;
+    color: #ffffff;
+    transform: rotate(90deg);
+}
+
+/* =========================================================
+   Body
+   ========================================================= */
+
+.extqli-config-body {
+    padding: 18px;
+    overflow-y: auto;
+    background: #171a1f;
+    display: grid;
+    gap: 14px;
+}
+
+/* =========================================================
+   Cards / panels — dashboard gray
+   ========================================================= */
+
+.extqli-config-card {
+    background: #1b1f25;
+    border: 1px solid #39414c;
+    border-radius: 7px;
+    padding: 16px;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .035),
+        0 10px 28px rgba(0, 0, 0, .12);
+}
+
+.extqli-config-card h3 {
+    margin: 0 0 13px;
+    color: #f1f5f9;
+    font-size: 15px;
+    font-weight: 900;
+    line-height: 1.1;
+    letter-spacing: -.035em;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, .55);
+}
+
+.extqli-config-card p {
+    margin: 3px 0 0;
+    color: #8794a8;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.4;
+}
+
+.extqli-config-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 12px;
+}
+
+/* =========================================================
+   Grid
+   ========================================================= */
+
+.extqli-config-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 16px;
+}
+
+/* =========================================================
+   Fields
+   ========================================================= */
+
+.extqli-config-field {
+    display: grid;
+    gap: 7px;
+    min-width: 0;
+}
+
+.extqli-config-field span {
+    color: #f1f5f9;
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -.01em;
+}
+
+.extqli-config-field input {
+    width: 100%;
+    height: 43px;
+    border: 1px solid #3d4653;
+    border-radius: 7px;
+    background: #15181e;
+    color: #f8fafc;
+    padding: 0 13px;
+    font-size: 13px;
+    font-weight: 900;
+    outline: none;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .025),
+        0 1px 0 rgba(0, 0, 0, .35);
+}
+
+.extqli-config-field input::placeholder {
+    color: #5f6b7d;
+    font-weight: 700;
+}
+
+.extqli-config-field input:focus {
+    border-color: #f97316;
+    box-shadow:
+        0 0 0 2px rgba(249, 115, 22, .15),
+        inset 0 1px 0 rgba(255, 255, 255, .04);
+}
+
+.extqli-config-field small {
+    color: #8190a5;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.35;
+}
+
+.extqli-config-field small strong {
+    color: #f97316;
+    font-weight: 900;
+}
+
+/* =========================================================
+   Button/status row
+   ========================================================= */
+
+.extqli-config-actions-row {
+    margin-top: 13px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+/* =========================================================
+   Status text
+   ========================================================= */
+
+.extqli-config-status,
+.extqli-config-save-status {
+    color: #92a0b3;
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1.4;
+}
+
+.extqli-config-status[data-mode="success"],
+.extqli-config-save-status[data-mode="success"] {
+    color: #22c55e;
+}
+
+.extqli-config-status[data-mode="error"],
+.extqli-config-save-status[data-mode="error"] {
+    color: #f87171;
+}
+
+.extqli-config-status[data-mode="loading"],
+.extqli-config-save-status[data-mode="loading"] {
+    color: #38bdf8;
+}
+
+/* =========================================================
+   Runtime cards
+   ========================================================= */
+
+.extqli-config-runtime {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.extqli-config-runtime div {
+    min-width: 0;
+    border: 1px solid #343d49;
+    border-radius: 7px;
+    padding: 11px 12px;
+    background: #171a20;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025);
+}
+
+.extqli-config-runtime span {
+    display: block;
+    color: #8491a5;
+    font-size: 9px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .095em;
+}
+
+.extqli-config-runtime strong {
+    display: block;
+    margin-top: 7px;
+    color: #f8fafc;
+    font-size: 12px;
+    font-weight: 900;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* =========================================================
+   Footer
+   ========================================================= */
+
+.extqli-config-footer {
+    padding: 14px 18px;
+    border-top: 1px solid #343b45;
+    background: #15181e;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.extqli-config-footer .extqli-config-save-status {
+    margin-right: auto;
+}
+
+/* =========================================================
+   Buttons
+   ========================================================= */
+
+.extqli-config-footer .btn,
+.extqli-config-card .btn,
+.extqli-config-dialog .btn {
+    height: 31px;
+    border-radius: 5px !important;
+    padding: 0 13px !important;
+    font-size: 9px !important;
+    font-weight: 900 !important;
+    text-transform: uppercase;
+    letter-spacing: -.02em;
+    line-height: 1;
+}
+
+.extqli-config-footer .btn-primary,
+#saveSystemConfigBtn {
+    border: 1px solid rgba(251, 146, 60, .65) !important;
+    background:
+        linear-gradient(180deg, #f97316 0%, #c2410c 100%) !important;
+    color: #ffffff !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .13),
+        0 8px 18px rgba(249, 115, 22, .16);
+}
+
+.extqli-config-footer .btn-primary:hover,
+#saveSystemConfigBtn:hover {
+    background:
+        linear-gradient(180deg, #fb923c 0%, #ea580c 100%) !important;
+    border-color: rgba(251, 146, 60, .9) !important;
+}
+
+.extqli-config-footer .btn-dark,
+.extqli-config-card .btn-dark,
+.extqli-config-dialog .btn-dark {
+    border: 1px solid #3d4653 !important;
+    background:
+        linear-gradient(180deg, #222830 0%, #171b21 100%) !important;
+    color: #e5e7eb !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .045),
+        0 1px 0 rgba(0, 0, 0, .45);
+}
+
+.extqli-config-footer .btn-dark:hover,
+.extqli-config-card .btn-dark:hover,
+.extqli-config-dialog .btn-dark:hover {
+    border-color: #f97316 !important;
+    background:
+        linear-gradient(180deg, #2a313b 0%, #1c222a 100%) !important;
+    color: #ffffff !important;
+}
+
+/* =========================================================
+   Warning
+   ========================================================= */
+
+.extqli-config-warning {
+    border: 1px solid rgba(249, 115, 22, .42);
+    background:
+        linear-gradient(180deg, rgba(70, 42, 25, .78), rgba(45, 31, 23, .78));
+    color: #fed7aa;
+    border-radius: 7px;
+    padding: 11px 13px;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1.45;
+    box-shadow:
+        inset 3px 0 0 #f97316,
+        0 10px 24px rgba(0, 0, 0, .12);
+}
+
+/* =========================================================
+   Scrollbar
+   ========================================================= */
+
+.extqli-config-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.extqli-config-body::-webkit-scrollbar-track {
+    background: #15181e;
+}
+
+.extqli-config-body::-webkit-scrollbar-thumb {
+    background: #3d4653;
+    border-radius: 999px;
+}
+
+.extqli-config-body::-webkit-scrollbar-thumb:hover {
+    background: #f97316;
+}
+
+/* =========================================================
+   Desktop scale
+   ========================================================= */
+
+@media (min-width: 1200px) {
+    .extqli-config-dialog {
+        width: min(1040px, calc(100vw - 42px));
+    }
+}
+
+/* =========================================================
+   Responsive
+   ========================================================= */
+
+@media (max-width: 860px) {
+    .extqli-config-modal {
+        padding: 10px;
+    }
+
+    .extqli-config-dialog {
+        width: calc(100vw - 20px);
+        max-height: calc(100vh - 20px);
+        border-radius: 7px;
+    }
+
+    .extqli-config-header {
+        padding: 18px;
+    }
+
+    .extqli-config-grid,
+    .extqli-config-runtime {
+        grid-template-columns: 1fr;
+    }
+
+    .extqli-config-card-head,
+    .extqli-config-footer {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .extqli-config-footer .extqli-config-save-status {
+        margin-right: 0;
+    }
+}

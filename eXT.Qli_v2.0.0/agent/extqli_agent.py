@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-eXT.Qli Windows/Linux agent with WebRTC screen streaming and remote control.
-Supports multiple concurrent viewers.
-"""
-
 from __future__ import annotations
 
 import asyncio

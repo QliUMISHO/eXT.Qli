@@ -1,0 +1,431 @@
+/* =========================================================
+   eXT.Qli — Viewer Controls
+   Matched to endpoint card button style
+   File:
+   /assets/css/elements/viewer-controls.css
+   ========================================================= */
+
+/* =========================================================
+   Control panel base
+   ========================================================= */
+
+.screen-view-layout .control-panel,
+.screen-view-layout .screen-panel {
+    background:
+        linear-gradient(180deg, #25292f 0%, #1d2228 100%);
+    border: 1px solid #3a424d;
+    border-radius: 5px;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .035),
+        0 10px 28px rgba(0, 0, 0, .14);
+}
+
+.screen-view-layout .panel-header {
+    background:
+        linear-gradient(180deg, #262b31 0%, #20252b 100%);
+    border-bottom: 1px solid #3a424d;
+}
+
+.screen-view-layout .panel-header .section-kicker {
+    color: #8b98aa;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+}
+
+.screen-view-layout .panel-header h3 {
+    color: #f8fafc;
+    font-size: 15px;
+    font-weight: 900;
+    letter-spacing: -.035em;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, .55);
+}
+
+.control-panel .panel-body {
+    background:
+        linear-gradient(180deg, #22272d 0%, #1d2228 100%);
+}
+
+.control-panel .field {
+    position: relative;
+    min-width: 0;
+}
+
+.control-panel .field label {
+    color: #f1f5f9;
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+}
+
+/* =========================================================
+   Agent dropdown — gray card style, subtle orange border
+   ========================================================= */
+
+#screenAgentSelect,
+.field-select#screenAgentSelect {
+    width: 100%;
+    height: 40px;
+    min-height: 40px;
+
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+
+    border: 1px solid #7a4a24;
+    border-radius: 4px;
+
+    background:
+        linear-gradient(180deg, #2b3037 0%, #20252b 100%);
+
+    color: #f8fafc;
+    padding: 0 38px 0 12px;
+
+    font-size: 12px;
+    font-weight: 900;
+    line-height: 40px;
+
+    outline: none;
+    cursor: pointer;
+
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .045),
+        0 1px 0 rgba(0, 0, 0, .45);
+
+    transition:
+        border-color .14s ease,
+        background .14s ease,
+        box-shadow .14s ease;
+}
+
+#screenAgentSelect:hover,
+.field-select#screenAgentSelect:hover {
+    border-color: #9a5b27;
+    background:
+        linear-gradient(180deg, #323840 0%, #252a30 100%);
+}
+
+#screenAgentSelect:focus,
+.field-select#screenAgentSelect:focus {
+    border-color: #a7612b;
+    box-shadow:
+        0 0 0 1px rgba(167, 97, 43, .28),
+        inset 0 1px 0 rgba(255, 255, 255, .045),
+        0 8px 18px rgba(0, 0, 0, .20);
+}
+
+#screenAgentSelect option {
+    background: #25292f;
+    color: #f8fafc;
+    font-weight: 800;
+}
+
+#screenAgentSelect option:checked {
+    background: #6f421f;
+    color: #ffffff;
+}
+
+/* Dropdown arrow */
+#screenAgentSelect {
+    background-image:
+        linear-gradient(45deg, transparent 50%, #b36a31 50%),
+        linear-gradient(135deg, #b36a31 50%, transparent 50%),
+        linear-gradient(180deg, #2b3037 0%, #20252b 100%);
+    background-position:
+        calc(100% - 18px) 16px,
+        calc(100% - 13px) 16px,
+        0 0;
+    background-size:
+        5px 5px,
+        5px 5px,
+        100% 100%;
+    background-repeat: no-repeat;
+}
+
+/* =========================================================
+   Action buttons — copied from endpoint REMOTE SCREEN style
+   ========================================================= */
+
+.control-panel .button-stack {
+    display: grid;
+    gap: 8px;
+}
+
+.control-panel .button-stack .btn,
+#startScreenViewBtn,
+#stopScreenViewBtn,
+#refreshViewerAgentsBtn,
+#fullscreenBtn {
+    width: 100%;
+    height: 34px;
+
+    border-radius: 3px !important;
+    border: 1px solid #7a4a24 !important;
+
+    background:
+        linear-gradient(180deg, #2d333a 0%, #23282f 100%) !important;
+
+    color: #f8fafc !important;
+
+    font-size: 9px !important;
+    font-weight: 900 !important;
+    text-transform: uppercase;
+    letter-spacing: -.015em;
+
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .045),
+        inset 0 -1px 0 rgba(0, 0, 0, .35),
+        0 1px 0 rgba(0, 0, 0, .45);
+
+    transition:
+        border-color .14s ease,
+        background .14s ease,
+        color .14s ease,
+        transform .12s ease;
+}
+
+.control-panel .button-stack .btn:hover,
+#startScreenViewBtn:hover,
+#stopScreenViewBtn:hover,
+#refreshViewerAgentsBtn:hover,
+#fullscreenBtn:hover {
+    border-color: #a7612b !important;
+    background:
+        linear-gradient(180deg, #363c44 0%, #292f36 100%) !important;
+    color: #ffffff !important;
+}
+
+.control-panel .button-stack .btn:active,
+#startScreenViewBtn:active,
+#stopScreenViewBtn:active,
+#refreshViewerAgentsBtn:active,
+#fullscreenBtn:active {
+    transform: translateY(1px);
+    background:
+        linear-gradient(180deg, #23282f 0%, #1d2228 100%) !important;
+}
+
+/* Remove old orange-primary feeling from Start Viewing */
+#startScreenViewBtn {
+    border-color: #7a4a24 !important;
+    background:
+        linear-gradient(180deg, #2d333a 0%, #23282f 100%) !important;
+}
+
+/* Slightly darker Stop button, still same style */
+#stopScreenViewBtn,
+#refreshViewerAgentsBtn,
+#fullscreenBtn {
+    border-color: #4a5564 !important;
+}
+
+#stopScreenViewBtn:hover,
+#refreshViewerAgentsBtn:hover,
+#fullscreenBtn:hover {
+    border-color: #7a4a24 !important;
+}
+
+/* =========================================================
+   Remote-control switch — card-style, less orange
+   ========================================================= */
+
+.remote-switch-row {
+    margin-top: 12px;
+}
+
+.remote-switch {
+    position: relative;
+    width: 100%;
+    min-height: 58px;
+
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    padding: 11px 12px 11px 52px;
+
+    border: 1px solid #3a424d;
+    border-left: 2px solid #7a4a24;
+    border-radius: 4px;
+
+    background:
+        linear-gradient(180deg, #2d333a 0%, #23282f 100%);
+    color: #e5e7eb;
+
+    cursor: pointer;
+    user-select: none;
+
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .035),
+        0 8px 18px rgba(0, 0, 0, .12);
+
+    transition:
+        background .14s ease,
+        border-color .14s ease;
+}
+
+.remote-switch:hover {
+    border-color: #4a5564;
+    border-left-color: #9a5b27;
+    background:
+        linear-gradient(180deg, #343a42 0%, #282e35 100%);
+}
+
+/* Hide native checkbox and render custom switch */
+.remote-switch input[type="checkbox"] {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+
+    width: 30px;
+    height: 16px;
+
+    margin: 0;
+    transform: translateY(-50%);
+
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+
+    border: 1px solid #5a6472;
+    border-radius: 999px;
+
+    background: #15191f;
+    outline: none;
+    cursor: pointer;
+
+    transition:
+        background .16s ease,
+        border-color .16s ease,
+        box-shadow .16s ease;
+}
+
+.remote-switch input[type="checkbox"]::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 50%;
+
+    width: 12px;
+    height: 12px;
+
+    border-radius: 999px;
+    background: #cbd5e1;
+
+    transform: translateY(-50%);
+    transition:
+        transform .16s ease,
+        background .16s ease;
+}
+
+.remote-switch input[type="checkbox"]:checked {
+    background: #7a4a24;
+    border-color: #a7612b;
+    box-shadow: 0 0 0 1px rgba(122, 74, 36, .30);
+}
+
+.remote-switch input[type="checkbox"]:checked::before {
+    background: #ffffff;
+    transform: translate(14px, -50%);
+}
+
+.remote-switch span {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.remote-switch span strong {
+    display: block;
+    color: #f8fafc;
+    font-size: 10px;
+    font-weight: 900;
+    line-height: 1.15;
+    text-transform: uppercase;
+    letter-spacing: .035em;
+}
+
+.remote-switch span small {
+    display: block;
+    color: #9aa6b6;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.35;
+}
+
+/* Active visual state — subtle brown/orange, not bright */
+.remote-switch:has(input[type="checkbox"]:checked) {
+    border-color: #7a4a24;
+    border-left-color: #a7612b;
+    background:
+        linear-gradient(180deg, #302d2a 0%, #24282e 100%);
+}
+
+.remote-switch:has(input[type="checkbox"]:checked) span strong {
+    color: #f4e3d2;
+}
+
+/* =========================================================
+   Status bar — card button gray scheme
+   ========================================================= */
+
+#screenStatusBar.status-bar {
+    margin-top: 10px;
+    min-height: 36px;
+
+    display: flex;
+    align-items: center;
+
+    border: 1px solid #3a424d;
+    border-left: 2px solid #7a4a24;
+    border-radius: 4px;
+
+    background:
+        linear-gradient(180deg, #2d333a 0%, #23282f 100%);
+    color: #cbd5e1;
+
+    padding: 8px 10px;
+
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.4;
+
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .035),
+        0 8px 18px rgba(0, 0, 0, .10);
+}
+
+/* =========================================================
+   Screen stage
+   ========================================================= */
+
+.screen-stage {
+    background: #06080c;
+    border: 1px solid #3a424d;
+    border-radius: 4px;
+}
+
+.screen-empty-state strong {
+    color: #f8fafc;
+}
+
+.screen-empty-state span {
+    color: #9aa6b6;
+}
+
+/* =========================================================
+   Responsive
+   ========================================================= */
+
+@media (max-width: 760px) {
+    .remote-switch {
+        padding-left: 50px;
+    }
+
+    #screenAgentSelect,
+    .field-select#screenAgentSelect {
+        font-size: 12px;
+    }
+}
