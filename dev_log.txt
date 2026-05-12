@@ -186,10 +186,10 @@ STARTED AS A JOKE. ENDED AS A THING.
 ・UI is cleaner, more compact, and less broken on narrow windows
 ・username can appear immediately through WebRTC data channel before database refresh
 ・database persistence is available through save_agent_identity.php
-・~~network scanner: nmap --top-ports 1000, detect server ip, save to devices~~
+・[REMOVED] network scanner: nmap --top-ports 1000, detect server ip, save to devices
 ・agent system: heartbeats every 30 sec, tasks via webrtc dc or http
 ・screen viewer: webrtc with turn relay, multi-viewer, pause/resume, remote control
-・~~remote control tab: cmd exec, tcp server mgmt, quick actions, task log~~
+・[REMOVED] remote control tab: cmd exec, tcp server mgmt, quick actions, task log
 ・db tables: agents, agent_heartbeats, agent_tasks, agent_task_results, devices
 ・System Configuration modal exists and controls scan/TURN/runtime settings
 ・frontend API base path is no longer hardcoded to only /eXT.Qli
@@ -198,13 +198,13 @@ STARTED AS A JOKE. ENDED AS A THING.
 ・main.js no longer carries static shared token / TURN credential values
 
 [UNSOLVED PECULIARITIES]
-・~~system_config.json exists as temporary config persistence unless database-backed config is fully wired~~
+・[SOLVED] system_config.json exists as temporary config persistence unless database-backed config is fully wired
 ・TURN credential storage should be finalized in database/config backend, not exposed raw in frontend payloads forever
 ・backend API endpoints must enforce server-side auth/session/database checks now that main.js no longer posts shared_token
 ・signaling still uses file polling (works for low volume, not scale)
 ・task result delivery is fire-and-forget (no retry)
-・~~send_agent_task.php calls external go-between on port 8081 (not in files)~~
-・~~agent-share.php removed (410) – pure webrtc now~~
+・[SOLVED] send_agent_task.php calls external go-between on port 8081 (not in files)
+・[SOLVED] agent-share.php removed (410) – pure webrtc now
 ・agents.username may stay blank if save_agent_identity.php is missing, blocked, or not wired to the correct database/session auth
 ・WebRTC identity only arrives after data channel connection opens
 ・offline agents cannot report fresh username through data channel
@@ -212,7 +212,7 @@ STARTED AS A JOKE. ENDED AS A THING.
 ・frontend opened from /eXT.Qli_preprod can still be confused if the agent itself was installed/configured against /eXT.Qli
 ・preview CAUTION badge depends on actual video render validation and can false-positive during slow WebRTC startup
 ・TURN TCP checker confirms port reachability, not full TURN allocation/auth correctness
-・~~server-side native viewer experiment was rolled back; browser WebRTC viewer remains the stable path for now~~
+・[SOLVED] server-side native viewer experiment was rolled back; browser WebRTC viewer remains the stable path for now
 
 [NOTES TO SELF]
 this was supposed to be simple. it never is.
