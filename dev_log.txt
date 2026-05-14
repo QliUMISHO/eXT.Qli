@@ -1,220 +1,422 @@
-eXT.Qli // devlog.txt
+eXT.Qli // dev_log.txt
 
 WARNING: THIS SHIT ESCALATED
 originally: "just a simple remote control lol"
-now: "why does this have a full agent fleet management system"
+now: "why does this have a protocol launcher, MSI installer, native viewer, TURN relay, and emotional damage"
 
 TWO TRANSPORTS:
-- WEBSOCKET (control / signaling / task polling)
+- WEBSOCKET / HTTP POLLING (control / signaling / task polling)
 - WEBRTC (screen streaming + remote input, low latency)
 
-STARTED AS A JOKE. ENDED AS A THING.
+STARTED AS A JOKE. ENDED AS INFRASTRUCTURE.
 
 [2026/03/17]
 ・[DEPRECATED] integrated nmap into php backend (scan.php + NetworkScanner.php)
 ・[DEPRECATED] device storage in mysql (devices table)
 ・[DEPRECATED] frontend raw nmap output
+・note: network scanning became less important once endpoint agents started heartbeating directly
 
 [2026/03/25]
-・agent heartbeat system (agent_heartbeat.php + extqli_agent.py)
-・agent tasks queue via db (agent_tasks, agent_task_results)
-・[DEPRECATED] tasks: cmd, screenshot, webcam, keylogger, tcp tunnel, file up/down, persistence
+・agent heartbeat system added through agent_heartbeat.php + extqli_agent.py
+・agent records stored in database using agent_uuid as the real endpoint identity
+・agent tasks queue created through agent_tasks and agent_task_results
+・[DEPRECATED] old task set included cmd, screenshot, webcam, keylogger, tcp tunnel, file up/down, persistence
+・lesson: putting every cursed feature in one agent is how projects become haunted
 
 [2026/04/01]
-・[DEPRECATED] feature creep: remote control tab before streaming
-・[DEPRECATED] dashboard.php tabs: agents, devices, screen viewer, remote control
-・[DEPRECATED] send_agent_task.php as bridge to local go-between (port 8081)
+・[DEPRECATED] dashboard.php tab structure included agents, devices, screen viewer, remote control
+・[DEPRECATED] send_agent_task.php used as bridge to local go-between on port 8081
+・[DEPRECATED] remote control tab existed before the WebRTC viewer became the real path
+・note: old external bridge approach was replaced by direct WebRTC/DataChannel behavior
 
 [2026/04/07]
-・[DEPRECATED] websocket remote input prototype (mouse/keyboard via pyautogui)
-・[DEPRECATED] keylogger + tcp server tasks in agent (pynput, interactive shell)
-・[DEPRECATED] screenshot, webcam, run_as_admin implemented
+・[DEPRECATED] websocket remote input prototype tested mouse/keyboard through pyautogui
+・[DEPRECATED] screenshot/webcam/run_as_admin/keylogger/tcp server task experiments existed here
+・note: this was prototype territory, not stable architecture
+・lesson: if it works once, it is not production. it is bait.
 
 [2026/04/14]
-・WebRTC remote input + screen streaming
-・signaling.php as dumb http polling broker (json files)
-・frontend webrtc: RTCPeerConnection + TURN, data channel, sdp munge
-・agent: ScreenCaptureTrack (aiortc + mss), multi-viewer support
+・WebRTC screen streaming added
+・WebRTC remote input added through DataChannel
+・signaling.php used as HTTP polling broker for offer/answer exchange
+・frontend WebRTC flow used RTCPeerConnection + TURN + DataChannel
+・agent added ScreenCaptureTrack using aiortc + mss
+・multi-viewer support started becoming real
+・TURN relay became required for stable network traversal
 
 [2026/04/16]
-・FIXED WEBRTC NOT CLOSING PROPERLY (cursed)
-・persistent connections per agent, isConnectionAlive() check
-・stopScreenView() only pauses video, startScreenView() reuses pc
-・lesson: don't kill the pc, you're just griefing yourself
+・fixed WebRTC not closing properly
+・persistent RTCPeerConnection logic introduced
+・isConnectionAlive() added to prevent reconnect spam
+・stopScreenView() changed to pause/detach viewer instead of destroying the connection
+・startScreenView() can reuse existing peer streams
+・lesson: killing the peer connection every time was self-sabotage with extra steps
 
 [2026/04/17]
-・install_agent_env.py (bundled python 3.11 embedded + pip packages)
-・no admin required, installs to %LOCALAPPDATA%\eXT.Qli\python
-・agent_state.json for persistent uuid/token
-・[DEPRECATED] turn.html test file (turn:10.201.0.254:3478)
+・install_agent_env.py introduced for bundled Python environment setup
+・agent_state.json used for persistent endpoint uuid/token
+・[DEPRECATED] turn.html test file used direct TURN test with turn:10.201.0.254:3478
+・note: TURN test moved into System Configuration / runtime checks later
 
-[2026/04/28]
+[2026/04/28 - ENDPOINT IDENTITY]
 ・fixed connected agent card display logic
-・card title now displays logged-in PC username instead of hostname
-・kept IP address visible under the username
-・changed the "User:" line below IP to display hostname as requested
-・confirmed browser JS cannot directly read remote Windows username
-・used extqli_agent.py getpass.getuser() output as the endpoint username source
-・added endpoint username debug print in extqli_agent.py
-・sent agent identity through existing WebRTC data channel
-・[DEPRECATED] app.js listens for agent_identity messages from the endpoint
-・cards now update instantly when the data channel receives username
-・added frontend-side identity cache per agent UUID
-・added save_agent_identity.php flow so username can persist back to MySQL
-・agents.username can now be updated from the frontend identity sync path
-・fixed issue where username appeared on cards but not in phpMyAdmin
-・kept WebRTC screen preview and remote control behavior intact
+・card title displays logged-in PC username instead of hostname
+・IP address stays visible under the username
+・hostname moved into the secondary metadata line
+・confirmed browser JavaScript cannot directly read remote Windows username
+・endpoint username source moved to extqli_agent.py using local OS username detection
+・agent identity sent through existing WebRTC DataChannel
+・frontend listens for agent_identity / identity / agent_info messages
+・cards update immediately when identity arrives over DataChannel
+・frontend identity cache added per agent UUID
+・save_agent_identity.php path introduced so identity can persist to MySQL
+・agents.username can be updated from frontend identity sync path
+・fixed issue where username appeared in card UI but not phpMyAdmin
+・WebRTC preview and remote control behavior preserved
 
 [2026/04/28 - UI / FRONTEND]
-・integrated Oat CDN styling direction for a cleaner component-based look
-・rebuilt dashboard layout into a modern glass-style console UI
-・updated sidebar branding with eXT.Qli identity
-・improved agent cards with cleaner spacing, badges, actions, and preview area
-・renamed visible and CSS-level "sentinel" references into "extqli"
+・integrated Oat CDN styling direction for cleaner component-based appearance
+・rebuilt dashboard into dark technical console layout
+・updated branding to eXT.Qli identity
+・improved endpoint cards with compact telemetry, badges, buttons, and preview area
+・renamed visible/CSS-level Sentinel references into extqli
 ・removed leftover Sentinel naming from dashboard structure
-・removed the Realtime Monitoring / Live Agent Grid status summary block as requested
-・kept Connected Agents and Screen Viewer tab behavior unchanged
-・preserved required IDs used by frontend JS:
+・removed Realtime Monitoring / Live Agent Grid summary block
+・kept Connected Agents and Screen Viewer behavior stable
+・preserved required frontend IDs:
   - extqliClientList
   - extqliMonitorGrid
   - screenAgentSelect
   - remoteScreenVideo
   - remoteControlOverlay
   - extqliRemoteStatus
-・fixed sidebar overflow / clipped menu text on narrow screen widths
-・expanded sidebar width and added safe ellipsis handling
-・prevented sidebar cards and nav labels from breaking the layout
+・fixed sidebar overflow and clipped menu text on narrow screens
+・expanded sidebar/card safe spacing
 ・kept frontend-only changes focused on appearance and rendering
+・lesson: changing IDs is how working JavaScript goes to die
 
 [2026/05/12 - SYSTEM CONFIG / NO MORE HARDCODED SERVER NONSENSE]
-・added System Configuration modal because hardcoding the Ubuntu server IP finally became cursed enough
-・added configurable scan IP / subnet field for automatic endpoint scanning
-・added configurable system port field with visible default port display
-・added TURN server configuration fields:
+・added System Configuration modal
+・added configurable endpoint discovery subnet / scan IP field
+・added configurable system port field with default port display
+・added TURN server config fields:
   - TURN server IP
   - TURN port
   - TURN username
   - TURN password
 ・added TURN TCP reachability checker
-・added TURN autodiscovery attempt using detected server network address
+・added TURN autodiscovery attempt from detected server network address
 ・added runtime status block:
   - detected web base
   - detected server IP
   - current ICE mode
-・created system_config.php backend endpoint for loading/saving config
-・created frontend system-config.js module for config modal behavior
-・created system-config.css because the first modal looked too clean and not enough like the actual system
+・created system_config.php backend endpoint
+・created system-config.js frontend module
+・created system-config.css using dashboard-matching gray/orange styling
 ・made API base path dynamic instead of hardcoding /eXT.Qli everywhere
-・frontend can now follow /eXT.Qli_preprod or whatever folder it is deployed under
-・added config validation before rendering endpoint cards
-・if scan subnet does not match detected server IP, cards are blocked instead of letting the UI hallucinate endpoints
-・websystem now starts cleanly with empty states when no endpoints are discovered
-・no more random startup card puke when the system has no agents yet
-・[DEPRECATED] added storage path for system_config.json as temporary config persistence
-・[SOLVED] added notes that config persistence should move fully to database because json files are the gateway drug to suffering
+・frontend can follow /eXT.Qli_preprod or other deployment folders
+・added config validation before endpoint card rendering
+・invalid scan subnet/config can block cards instead of rendering fake/broken endpoints
+・websystem starts cleanly with empty states when no endpoints exist
+・[DEPRECATED] system_config.json used as temporary config persistence
+・[SOLVED] failed to create/write system_config.json caused by backend/storage permission issue
+・permission fix requires backend/storage owned/writable by www-data
+・lesson: JSON config files are easy until Apache reminds you about filesystem permissions
 
 [2026/05/12 - WEBRTC / PREVIEW STABILITY]
 ・main.js stabilized around persistent WebRTC preview connections
-・screen preview connections are kept alive after Stop Viewing
-・Stop Viewing now detaches the main viewer only instead of murdering the RTCPeerConnection
-・Start Viewing can reuse existing peer stream for faster resume
+・screen preview connections stay alive after Stop Viewing
+・Stop Viewing detaches the main viewer only
+・Start Viewing can reuse existing peer stream
 ・added faster ICE gathering path with early candidate completion
 ・added answer polling fast retry behavior
-・reduced pointless timeout griefing during offer/answer flow
-・kept shared viewer flow compatible with current signaling.php polling broker
-・kept preview streams alive in card grid where possible
-・reattachAllPreviewStreams() used to rebind existing streams after render
-・loadAgents() now respects config validation before fetching/rendering
-・autoConnectAgents() now stops if system config is invalid
-・clearEndpointCardsForInvalidConfig() added because sometimes the correct output is "show nothing, idiot"
+・reduced timeout grief during offer/answer flow
+・kept signaling.php polling broker compatible with existing agent flow
+・preview streams stay alive in card grid when possible
+・reattachAllPreviewStreams() rebinds existing streams after render
+・loadAgents() respects config validation
+・autoConnectAgents() stops if system config is invalid
+・clearEndpointCardsForInvalidConfig() added because sometimes "show nothing" is the correct UI
 
-[2026/05/12 - UI / MODAL / CONTROL PANEL COSMETIC DAMAGE CONTROL]
-・redesigned System Configuration modal to match the actual dashboard gray panel style
-・removed the bright white corporate SaaS modal look
-・matched modal colors to dashboard panels:
+[2026/05/12 - UI / MODAL / CONTROL PANEL]
+・redesigned System Configuration modal to match dashboard panel style
+・removed bright white SaaS modal look
+・matched modal colors to dashboard gray/orange theme:
   - #1a1d21
   - #1b1f25
   - #171a1f
   - gray borders
   - muted orange accents
-・changed System Config top button from blue nav style to dashboard gray
-・adjusted modal cards, footer, input fields, buttons, and warning block
+・changed System Config top button to dashboard gray/orange styling
+・adjusted modal cards, inputs, footer, buttons, and warning/status block
 ・added viewer-controls.css for Screen Viewer controls
-・fixed ugly native agent dropdown
-・added custom dropdown arrow styling
-・fixed remote control switch overlap / bad alignment
-・made control buttons copy the endpoint card "REMOTE SCREEN" button style
-・reduced bright orange overload because apparently my eyes deserved mercy
-・screen viewer controls now match card-style gray gradients instead of looking like a separate app
-・status bar under the switch now uses the same dark card scheme
+・fixed native dropdown styling
+・added custom dropdown arrow
+・fixed remote control switch alignment
+・control buttons copied the endpoint card REMOTE SCREEN button language
+・reduced excessive orange because eyesight is still a dependency
+・screen viewer controls now match endpoint card styling
+・status bar under switch uses dark card scheme
 
 [2026/05/12 - ENDPOINT CARD CLEANUP]
-・removed hover blur / glow garbage from endpoint cards
-・fixed online badge alignment inside the pill
-・added preview health badge concept for cards with broken/missing previews
-・renamed warning-style preview badge to CAUTION because "warning" sounded too OSHA
-・CAUTION badge follows the same pill family as the ONLINE badge
+・removed hover blur/glow from endpoint cards
+・fixed ONLINE badge alignment inside pill
+・added preview health badge concept
+・renamed warning badge to CAUTION
+・CAUTION badge follows same pill family as ONLINE badge
 ・added preview validation idea:
-  - check if preview video has srcObject
-  - check if video can render frames / has dimensions
-  - if no renderable preview appears, apply CAUTION immediately
-  - if preview starts rendering, remove CAUTION automatically
-・kept endpoint card preview wrappers dark and compact
-・prevented hover effects from blurring screenshots like a haunted security camera
+  - check preview video srcObject
+  - check renderable video dimensions
+  - apply CAUTION if no preview renders
+  - remove CAUTION once preview starts rendering
+・kept endpoint preview wrappers dark and compact
+・prevented hover effects from blurring screenshots like haunted CCTV footage
 
-[2026/05/12 - SECURITY / REMOVE HARDCODED CREDENTIALS FROM MAIN.JS]
+[2026/05/12 - SECURITY / REMOVE HARDCODED CREDENTIALS]
 ・removed hardcoded shared_token from main.js payloads
 ・removed hardcoded TURN/STUN credentials from main.js
-・main.js now expects ICE config from runtime system config instead of embedding TURN creds
-・buildRtcConfiguration() now reads from:
+・main.js expects ICE config from runtime system config
+・buildRtcConfiguration() reads from:
   - window.EXTQLI_CONFIG.buildIceServers()
   - window.EXTQLI_SYSTEM_CONFIG.ice_servers
   - window.EXTQLI_SYSTEM_CONFIG.stun_url
   - window.EXTQLI_SYSTEM_CONFIG.turn_* fields
-・if no ICE servers are configured, frontend logs warning and uses host candidates only
-・save_agent_identity.php, agent_task_result.php, and delete_agent.php must stop relying on static posted tokens
-・credential ownership moved toward backend/session/database config instead of frontend JavaScript
-・lesson: if secrets are in JS, they are not secrets, they are decorations
+・frontend logs warning and uses host candidates only when no ICE servers exist
+・save_agent_identity.php, agent_task_result.php, and delete_agent.php should use server-side auth/session/database logic
+・credential ownership moved toward backend/session/database config
+・lesson: if secrets are in frontend JS, they are not secrets. they are decorations.
+
+[2026/05/13 - NATIVE VIEWER EXPERIMENT]
+・created native Python viewer using aiortc
+・native viewer connects to existing signaling.php
+・native viewer receives WebRTC video track
+・native viewer sends mouse/keyboard input through DataChannel
+・OpenCV used for local native display window
+・pynput used for keyboard capture
+・first version launched from PHP on Ubuntu server
+・confirmed WebRTC flow was working:
+  - TURN allocation created
+  - offer submitted
+  - answer received
+  - video track received
+・[DEPRECATED] server-side native viewer launcher approach
+・[SOLVED] Ubuntu headless display crash:
+  - qt.qpa.xcb could not connect to display
+  - OpenCV window cannot show on headless server
+・correct architecture became local Windows native viewer, not Ubuntu GUI process
+・lesson: headless means headless. shocking discovery.
+
+[2026/05/13 - WINDOWS LOCAL NATIVE VIEWER]
+・moved native viewer execution to Windows operator/admin PC
+・native viewer can be run manually:
+  - python extqli_native_viewer.py --base-url http://10.201.0.254/eXT.Qli_preprod --agent-uuid <UUID>
+・installed missing Windows dependencies:
+  - requests
+  - aiortc
+  - av
+  - opencv-python
+  - pynput
+  - numpy
+・fixed import errors such as ModuleNotFoundError: requests
+・fixed command syntax testing for python -c import checks
+・verified WebRTC connection reached connected state on Windows
+・fixed DataChannel thread error:
+  - "There is no current event loop in thread 'Thread-1'"
+・added send_json_threadsafe() using asyncio loop.call_soon_threadsafe()
+・keyboard and mouse input now dispatch through event loop safely
+・lesson: pynput runs in its own thread because apparently one event loop was too peaceful
+
+[2026/05/13 - ROBLOX-STYLE PROTOCOL LAUNCHER]
+・studied browser-to-local-app launch model
+・implemented custom Windows protocol concept:
+  - extqli-viewer://
+・created protocol launcher:
+  - extqli_viewer_protocol_launcher.py
+・browser Native Viewer button now calls:
+  - extqli-viewer://open?base_url=<ENCODED_BASE_URL>&agent_uuid=<UUID>
+・launcher parses protocol URL
+・launcher runs local native viewer with base_url and agent_uuid
+・old PHP server-side native_viewer_launch.php path became deprecated
+・browser can now trigger installed Windows native viewer like Roblox launcher flow
+・[DEPRECATED] Native Viewer button calling Ubuntu-side Python command
+・[SOLVED] console still showing /var/www/html/... meant old JS/cache/duplicate launcher was still loaded
+・native-viewer-launcher.js updated to protocol launch behavior
+・manual fallback command copied/logged for debugging
+・lesson: browser cannot spawn local Python directly. OS protocol handler does the dirty work.
+
+[2026/05/13 - MSI INSTALLER]
+・converted native viewer stack into Windows MSI build flow
+・created build structure:
+  - build_msi.ps1
+  - extqli_native_viewer.py
+  - extqli_viewer_protocol_launcher.py
+  - requirements.txt
+  - installer/Product.wxs
+・PyInstaller used to build:
+  - extqli_native_viewer.exe
+  - extqli_viewer_protocol_launcher.exe
+・WiX Toolset used to package MSI
+・MSI installs to:
+  - C:\Program Files\eXT.Qli Native Viewer\
+・MSI registers:
+  - extqli-viewer://
+・Start Menu shortcut added
+・protocol handler registered through installer registry keys
+・created MSI output:
+  - dist-msi/eXTQliNativeViewerSetup.msi
+・fixed build errors:
+  - build_msi.ps1 not found
+  - missing extqli_native_viewer.py
+  - missing extqli_viewer_protocol_launcher.py
+  - missing requirements.txt
+  - missing installer/Product.wxs
+・added instruction file for MSI build process:
+  - extqli_native_viewer_msi_build_instructions.txt
+・lesson: installers are just dependency trauma with a progress bar
+
+[2026/05/13 - NO TERMINAL WHEN LAUNCHING NATIVE VIEWER]
+・changed PyInstaller build to --windowed / no-console mode
+・removed CREATE_NEW_CONSOLE behavior from protocol launcher
+・launcher now starts native viewer detached without terminal window
+・stdout/stderr redirected away from visible terminal
+・logs written to:
+  - %LOCALAPPDATA%\eXT.QliNativeViewer\logs
+・expected behavior:
+  - browser opens native viewer
+  - no CMD terminal remains visible
+  - OpenCV/native viewer window stays visible
+・[SOLVED] terminal remains after protocol launch
+・lesson: console windows are useful until they start cosplaying as UI
+
+[2026/05/14 - MULTI-ENDPOINT CARD RENDERING]
+・fixed issue where only existing/two endpoint cards appeared
+・backend agents.php changed to return all alive agents from database
+・agent_heartbeat.php changed to upsert agent records using agent_uuid
+・agent_uuid treated as unique endpoint identity
+・heartbeat writes update agents.last_seen
+・frontend renders all records returned by agents.php
+・online/offline derived from recent last_seen TTL
+・fixed SQL error caused by SHOW TABLES LIKE ? style query
+・table and column checks moved to INFORMATION_SCHEMA queries
+・backend can create/repair required agents table columns
+・fixed 500 errors from fragile/incomplete agents.php replacements
+・agent card rendering restored after backend query repair
+・[SOLVED] cards disappeared after backend replacement
+・[SOLVED] SQL syntax error near '?' from SHOW TABLES LIKE placeholder
+・[SOLVED] all alive endpoint cards now render if agents are posting heartbeat
+・lesson: if cards vanish, blame the API before blaming the CSS. probably.
+
+[2026/05/14 - NATIVE VIEWER PERFORMANCE]
+・native viewer became laggy and could crash under heavy video frame load
+・optimized extqli_native_viewer.py
+・viewer now keeps only the latest video frame
+・old frames are dropped instead of queued
+・display FPS capped by default
+・blocking HTTP requests moved off asyncio loop using asyncio.to_thread()
+・DataChannel send remains thread-safe
+・input sending throttled for mouse movement
+・logs native crashes to:
+  - %LOCALAPPDATA%\eXT.QliNativeViewer\logs
+・window title can show received/displayed frame counters
+・viewer sends quality request through DataChannel:
+  - max bitrate
+  - frame rate
+・[SOLVED] native viewer lag/crash from frame overload
+・lesson: rendering every frame is not performance. it is a denial-of-service attack against yourself.
+
+[2026/05/14 - PROJECT CLEANUP]
+・confirmed native_viewer/venv can be deleted from source tree after MSI/EXE build path is used
+・native_viewer/venv only needed for direct Python execution
+・MSI/EXE build bundles dependencies through PyInstaller
+・keep:
+  - native_viewer/extqli_native_viewer.py
+  - native_viewer/requirements.txt
+・delete:
+  - native_viewer/venv/
+・recommended .gitignore entries:
+  - native_viewer/venv/
+  - **/venv/
+  - **/.venv/
+  - __pycache__/
+  - *.pyc
+・lesson: never commit venv unless you enjoy uploading a small landfill
 
 [CURRENT STATE]
-・agent cards display logged-in username as the main title
-・IP address displays below the username
-・User line displays hostname
-・screen preview continues through WebRTC
-・remote control still uses existing data channel flow
-・UI is cleaner, more compact, and less broken on narrow windows
-・username can appear immediately through WebRTC data channel before database refresh
-・database persistence is available through save_agent_identity.php
-・[REMOVED] network scanner: nmap --top-ports 1000, detect server ip, save to devices
-・agent system: heartbeats every 30 sec, tasks via webrtc dc or http
-・screen viewer: webrtc with turn relay, multi-viewer, pause/resume, remote control
-・[REMOVED] remote control tab: cmd exec, tcp server mgmt, quick actions, task log
-・db tables: agents, agent_heartbeats, agent_tasks, agent_task_results, devices
-・System Configuration modal exists and controls scan/TURN/runtime settings
-・frontend API base path is no longer hardcoded to only /eXT.Qli
-・websystem can block card rendering when config is wrong
-・screen viewer controls now match endpoint card styling
+・browser WebRTC viewer remains stable production path
+・Windows native viewer exists as optional/operator viewer path
+・native viewer launches through extqli-viewer:// protocol
+・MSI installer can install native viewer and protocol launcher
+・native viewer receives WebRTC video through existing signaling.php/TURN flow
+・native viewer sends input through WebRTC DataChannel
+・native viewer logs to LOCALAPPDATA instead of requiring terminal visibility
+・agent cards display logged-in username as main title
+・IP address displays below username
+・hostname displays as secondary metadata
+・endpoint cards render from agents.php response
+・agents.php returns all alive endpoint agents if heartbeat is being posted
+・agent_heartbeat.php upserts agents by agent_uuid
+・System Configuration modal controls scan/TURN/runtime settings
+・frontend API base path is dynamic
 ・main.js no longer carries static shared token / TURN credential values
+・websystem can block card rendering when config is invalid
+・screen viewer controls match endpoint card styling
+・native_viewer/venv is removable from source when MSI build is used
+・backend/storage must be writable by www-data if system_config.json path is still active
+
+[REMOVED / DEPRECATED]
+・[DEPRECATED] nmap scanner-first discovery path
+・[DEPRECATED] devices table as primary source for live endpoint cards
+・[DEPRECATED] old remote control tab with cmd/tcp/task console as main workflow
+・[DEPRECATED] send_agent_task.php external go-between on port 8081
+・[DEPRECATED] server-side Ubuntu native viewer launch
+・[DEPRECATED] PHP launching Python GUI on headless Ubuntu
+・[DEPRECATED] hardcoded TURN credentials inside main.js
+・[DEPRECATED] hardcoded shared_token in frontend JS
+・[DEPRECATED] system_config.json as long-term config storage
+・[DEPRECATED] native_viewer/venv committed inside project source
+・[DEPRECATED] old Native Viewer browser button that calls native_viewer_launch.php
+・[DEPRECATED] app.js identity handling references where main.js/module flow replaced it
 
 [UNSOLVED PECULIARITIES]
-・[SOLVED] system_config.json exists as temporary config persistence unless database-backed config is fully wired
-・TURN credential storage should be finalized in database/config backend, not exposed raw in frontend payloads forever
-・backend API endpoints must enforce server-side auth/session/database checks now that main.js no longer posts shared_token
-・signaling still uses file polling (works for low volume, not scale)
-・task result delivery is fire-and-forget (no retry)
-・[SOLVED] send_agent_task.php calls external go-between on port 8081 (not in files)
-・[SOLVED] agent-share.php removed (410) – pure webrtc now
-・agents.username may stay blank if save_agent_identity.php is missing, blocked, or not wired to the correct database/session auth
-・WebRTC identity only arrives after data channel connection opens
-・offline agents cannot report fresh username through data channel
-・old cached main.js/app.js can still cause confusing behavior until hard refresh
-・frontend opened from /eXT.Qli_preprod can still be confused if the agent itself was installed/configured against /eXT.Qli
-・preview CAUTION badge depends on actual video render validation and can false-positive during slow WebRTC startup
 ・TURN TCP checker confirms port reachability, not full TURN allocation/auth correctness
-・[SOLVED] server-side native viewer experiment was rolled back; browser WebRTC viewer remains the stable path for now
+・signaling.php still uses HTTP/file polling style flow; works for low/medium volume but is not a real signaling server
+・task result delivery may still be fire-and-forget depending on endpoint path
+・agents.username may stay blank if DataChannel identity never opens
+・offline agents cannot report fresh username until they reconnect
+・old cached JS can still cause confusing behavior until CTRL + F5
+・frontend opened from /eXT.Qli_preprod can confuse old agents if their saved base URL points to /eXT.Qli
+・preview CAUTION badge can false-positive during slow WebRTC startup
+・native viewer MSI must be reinstalled on operator PCs after each rebuilt EXE
+・Windows protocol launch depends on extqli-viewer:// registry registration
+・browser may show a protocol confirmation prompt depending on security/browser settings
+・true TURN auth validation should eventually test allocation, not just TCP port connection
+・system config should eventually be database-backed permanently instead of JSON file fallback
+
+[BUILD NOTES]
+・native viewer source:
+  - extqli_native_viewer.py
+・protocol launcher source:
+  - extqli_viewer_protocol_launcher.py
+・MSI build script:
+  - build_msi.ps1
+・WiX installer definition:
+  - installer/Product.wxs
+・Python dependency list:
+  - requirements.txt
+・MSI output:
+  - dist-msi/eXTQliNativeViewerSetup.msi
+・Windows logs:
+  - %LOCALAPPDATA%\eXT.QliNativeViewer\logs
+・Ubuntu project path currently expected:
+  - /var/www/html/eXT.Qli_preprod
+・dashboard URL currently expected:
+  - http://10.201.0.254/eXT.Qli_preprod
 
 [NOTES TO SELF]
-this was supposed to be simple. it never is.
-if the frontend has secrets, it already lost.
-if the card is blank, maybe it is not broken. maybe it is being honest.
+this was supposed to be a simple viewer.
+then came the knowledge that venv should never be committed.
+if the card is blank, check heartbeat.
+if the viewer lags, drop frames.
+if the browser cannot open the app, check the protocol handler.
+if the server tries to open a GUI, remember: it is headless, genius.
 **sage**
