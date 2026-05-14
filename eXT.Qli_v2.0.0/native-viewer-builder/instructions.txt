@@ -1,0 +1,348 @@
+eXT.Qli Native Viewer MSI Build Instructions
+===========================================
+
+Purpose
+-------
+This guide builds the eXT.Qli Native Viewer into a Windows MSI installer.
+
+Final installed result:
+
+    C:\Program Files\eXT.Qli Native Viewer\
+        extqli_native_viewer.exe
+        extqli_viewer_protocol_launcher.exe
+
+The installer also registers this browser-launch protocol:
+
+    extqli-viewer://
+
+This allows the eXT.Qli browser dashboard to open the installed native viewer from the Native Viewer button.
+
+
+Required Build Machine
+----------------------
+Use a Windows machine for building the MSI.
+
+Required software:
+
+    1. Python 3.10+ or Python 3.11+
+    2. pip
+    3. WiX Toolset v3.14
+    4. PowerShell
+    5. Your native viewer source files
+
+
+Expected Build Folder
+---------------------
+Create this folder:
+
+    C:\Users\Account Associate\Desktop\build
+
+The build folder must contain:
+
+    C:\Users\Account Associate\Desktop\build\
+        build_msi.ps1
+        extqli_native_viewer.py
+        extqli_viewer_protocol_launcher.py
+        requirements.txt
+        installer\
+            Product.wxs
+
+
+File Checklist
+--------------
+Before building, run this in PowerShell:
+
+    cd "C:\Users\Account Associate\Desktop\build"
+    dir
+    dir .\installer
+
+You must see:
+
+    build_msi.ps1
+    extqli_native_viewer.py
+    extqli_viewer_protocol_launcher.py
+    requirements.txt
+    installer\Product.wxs
+
+If one of these is missing, the build will fail.
+
+
+requirements.txt
+----------------
+The requirements.txt file should contain:
+
+    requests
+    aiortc
+    av
+    opencv-python
+    pynput
+    numpy
+    pyinstaller
+
+
+Install WiX Toolset
+-------------------
+Install WiX Toolset v3.14.
+
+After installing WiX, these files should exist:
+
+    C:\Program Files (x86)\WiX Toolset v3.14\bin\candle.exe
+    C:\Program Files (x86)\WiX Toolset v3.14\bin\light.exe
+
+If build_msi.ps1 says WiX is missing, restart PowerShell after installing WiX.
+
+
+Build the MSI
+-------------
+Open PowerShell.
+
+Run:
+
+    cd "C:\Users\Account Associate\Desktop\build"
+    Set-ExecutionPolicy -Scope Process Bypass
+    .\build_msi.ps1
+
+Expected output folder:
+
+    C:\Users\Account Associate\Desktop\build\dist-msi\
+
+Expected MSI output:
+
+    C:\Users\Account Associate\Desktop\build\dist-msi\eXTQliNativeViewerSetup.msi
+
+
+Install the MSI
+---------------
+Before installing a new build, uninstall the old one:
+
+    Settings -> Apps -> eXT.Qli Native Viewer -> Uninstall
+
+Then install:
+
+    C:\Users\Account Associate\Desktop\build\dist-msi\eXTQliNativeViewerSetup.msi
+
+
+Test the Protocol Handler
+-------------------------
+Press:
+
+    Win + R
+
+Paste this sample command:
+
+    extqli-viewer://open?base_url=http%3A%2F%2F10.201.0.254%2FeXT.Qli_preprod&agent_uuid=d66f857f-13c3-490b-a127-f3e848790b4f
+
+Expected result:
+
+    The installed eXT.Qli Native Viewer opens.
+    No terminal should appear if the build uses --windowed.
+    The native viewer connects to the selected endpoint.
+
+
+Dashboard Requirement
+---------------------
+The browser dashboard must call the protocol URL, not the old PHP server-side launcher.
+
+Correct browser launch format:
+
+    extqli-viewer://open?base_url=<ENCODED_BASE_URL>&agent_uuid=<AGENT_UUID>
+
+Example JavaScript logic:
+
+    window.location.href =
+        "extqli-viewer://open" +
+        "?base_url=" + encodeURIComponent("http://10.201.0.254/eXT.Qli_preprod") +
+        "&agent_uuid=" + encodeURIComponent(agentUuid);
+
+The browser console should show something like:
+
+    [eXT.Qli Native Viewer protocol] extqli-viewer://open?base_url=...
+
+It should NOT show the old Ubuntu server command:
+
+    /var/www/html/eXT.Qli_preprod/native_viewer/venv/bin/python3
+
+
+Important Architecture Note
+---------------------------
+Do not launch the native GUI viewer from PHP on the Ubuntu server.
+
+Wrong flow:
+
+    Browser -> PHP on Ubuntu -> Python GUI on Ubuntu server
+
+Correct flow:
+
+    Browser -> extqli-viewer:// protocol -> installed Windows native viewer -> WebRTC signaling/TURN
+
+The native viewer must run on the operator/admin Windows machine.
+
+
+Logs
+----
+Native viewer and launcher logs are stored here:
+
+    %LOCALAPPDATA%\eXT.QliNativeViewer\logs
+
+Paste this into File Explorer:
+
+    %LOCALAPPDATA%\eXT.QliNativeViewer\logs
+
+Useful logs:
+
+    protocol_launcher.log
+    native_viewer_YYYYMMDD_HHMMSS.log
+
+
+Common Errors and Fixes
+-----------------------
+
+1. PowerShell says build_msi.ps1 is not recognized
+
+Cause:
+    You are not inside the build folder, or the file is named incorrectly.
+
+Fix:
+
+    cd "C:\Users\Account Associate\Desktop\build"
+    dir build_msi*
+    .\build_msi.ps1
+
+If it is named build_msi.ps1.txt, rename it:
+
+    ren build_msi.ps1.txt build_msi.ps1
+
+
+2. Missing extqli_native_viewer.py
+
+Cause:
+    The source file is not in the build folder.
+
+Fix:
+
+    Copy your working extqli_native_viewer.py into:
+
+        C:\Users\Account Associate\Desktop\build\extqli_native_viewer.py
+
+
+3. Missing extqli_viewer_protocol_launcher.py
+
+Cause:
+    The protocol launcher source file is not in the build folder.
+
+Fix:
+
+    Create or copy it into:
+
+        C:\Users\Account Associate\Desktop\build\extqli_viewer_protocol_launcher.py
+
+
+4. Missing Product.wxs
+
+Cause:
+    The WiX installer definition is missing.
+
+Fix:
+
+    Create:
+
+        C:\Users\Account Associate\Desktop\build\installer\Product.wxs
+
+
+5. WiX Toolset was not found
+
+Cause:
+    candle.exe and light.exe are missing or not in PATH.
+
+Fix:
+    Install WiX Toolset v3.14, then restart PowerShell.
+
+
+6. Terminal appears when opening Native Viewer
+
+Cause:
+    The EXE was built in console mode or the launcher uses CREATE_NEW_CONSOLE.
+
+Fix:
+    In build_msi.ps1, make sure PyInstaller uses:
+
+        --windowed
+
+    In extqli_viewer_protocol_launcher.py, do not use:
+
+        subprocess.CREATE_NEW_CONSOLE
+
+    Rebuild and reinstall the MSI.
+
+
+7. Native Viewer opens but lags/crashes
+
+Cause:
+    Viewer is rendering too many frames or blocking the event loop.
+
+Fix:
+    Use the optimized extqli_native_viewer.py that:
+        - keeps only the latest video frame
+        - caps display FPS
+        - sends DataChannel input thread-safely
+        - logs crashes to %LOCALAPPDATA%\eXT.QliNativeViewer\logs
+
+
+8. Browser button does nothing
+
+Cause:
+    Protocol handler is not registered or dashboard JS is still old/cached.
+
+Fix:
+    Test with Win + R:
+
+        extqli-viewer://open?base_url=http%3A%2F%2F10.201.0.254%2FeXT.Qli_preprod&agent_uuid=TEST
+
+    If it does not open, reinstall the MSI.
+
+    If Win + R works but browser does not, hard refresh the dashboard:
+
+        CTRL + F5
+
+    Also check that native-viewer-launcher.js is using extqli-viewer:// and not the old PHP launcher.
+
+
+Recommended Build Cycle
+-----------------------
+Use this process every time you update the native viewer:
+
+    1. Edit:
+        C:\Users\Account Associate\Desktop\build\extqli_native_viewer.py
+
+    2. Rebuild:
+        cd "C:\Users\Account Associate\Desktop\build"
+        .\build_msi.ps1
+
+    3. Uninstall old app:
+        Settings -> Apps -> eXT.Qli Native Viewer -> Uninstall
+
+    4. Install new MSI:
+        C:\Users\Account Associate\Desktop\build\dist-msi\eXTQliNativeViewerSetup.msi
+
+    5. Test:
+        Win + R -> extqli-viewer://open?base_url=...&agent_uuid=...
+
+
+Final Deployment Notes
+----------------------
+The MSI only installs the native viewer on the Windows operator/admin machine.
+
+The Ubuntu server still handles:
+
+    - Apache/PHP dashboard
+    - MariaDB database
+    - signaling.php
+    - system_config.php
+    - coturn/TURN server
+
+The Windows native viewer handles:
+
+    - opening a local native viewer window
+    - connecting to signaling.php
+    - receiving WebRTC video
+    - sending mouse/keyboard input through DataChannel

@@ -1,0 +1,17 @@
+[2026-05-13 05:06:59,000] [INFO] TURN allocation created ('10.201.0.254', 49551) (expires in 600 seconds)
+[2026-05-13 05:06:59,000] [INFO] TURN allocation created ('10.201.0.254', 61403) (expires in 600 seconds)
+[2026-05-13 05:06:59,028] [INFO] Offer submitted.
+[2026-05-13 05:07:23,064] [ERROR] Native viewer failed: Timed out waiting for WebRTC answer.
+Traceback (most recent call last):
+  File "/var/www/html/eXT.Qli_preprod/native_viewer/extqli_native_viewer.py", line 563, in main
+    await viewer.start()
+  File "/var/www/html/eXT.Qli_preprod/native_viewer/extqli_native_viewer.py", line 203, in start
+    await self.poll_answer()
+  File "/var/www/html/eXT.Qli_preprod/native_viewer/extqli_native_viewer.py", line 264, in poll_answer
+    raise TimeoutError("Timed out waiting for WebRTC answer.")
+TimeoutError: Timed out waiting for WebRTC answer.
+[2026-05-13 05:07:23,067] [INFO] iceConnectionState=closed
+[2026-05-13 05:07:23,067] [INFO] connectionState=closed
+[2026-05-13 05:07:23,068] [INFO] TURN allocation deleted ('10.201.0.254', 61403)
+[2026-05-13 05:07:23,069] [INFO] TURN allocation deleted ('10.201.0.254', 49551)
+[2026-05-13 05:07:23,069] [INFO] Native viewer closed.

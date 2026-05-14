@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+
+  <Product
+    Id="*"
+    Name="eXT.Qli Native Viewer"
+    Language="1033"
+    Version="1.0.0.0"
+    Manufacturer="Qliphoth"
+    UpgradeCode="7F6D22A1-4D4D-4D26-8F82-8D9F0F0A5F21">
+
+    <Package
+      InstallerVersion="500"
+      Compressed="yes"
+      InstallScope="perMachine"
+      Description="eXT.Qli Native Viewer"
+      Comments="Installs the eXT.Qli Native Viewer and extqli-viewer protocol handler." />
+
+    <MajorUpgrade
+      DowngradeErrorMessage="A newer version of eXT.Qli Native Viewer is already installed." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="MainFeature" Title="eXT.Qli Native Viewer" Level="1">
+      <ComponentGroupRef Id="AppComponents" />
+      <ComponentGroupRef Id="ProtocolComponents" />
+      <ComponentGroupRef Id="ShortcutComponents" />
+    </Feature>
+
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <UIRef Id="WixUI_InstallDir" />
+
+  </Product>
+
+  <Fragment>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFilesFolder">
+        <Directory Id="INSTALLFOLDER" Name="eXT.Qli Native Viewer" />
+      </Directory>
+
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="eXT.Qli Native Viewer" />
+      </Directory>
+    </Directory>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="AppComponents" Directory="INSTALLFOLDER">
+
+      <Component Id="NativeViewerExeComponent" Guid="B37E0484-6AA6-4B5C-A97A-5B277935D001">
+        <File
+          Id="NativeViewerExe"
+          Source="$(var.SourceDir)\extqli_native_viewer.exe"
+          KeyPath="yes" />
+      </Component>
+
+      <Component Id="ProtocolLauncherExeComponent" Guid="D35AD7A3-58B1-4D96-AFB4-C7D7211F4B02">
+        <File
+          Id="ProtocolLauncherExe"
+          Source="$(var.SourceDir)\extqli_viewer_protocol_launcher.exe"
+          KeyPath="yes" />
+      </Component>
+
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="ProtocolComponents" Directory="INSTALLFOLDER">
+
+      <Component Id="ProtocolHandlerComponent" Guid="A9A49B45-F809-49E8-A7F4-7C998D49D100">
+
+        <RegistryKey Root="HKCR" Key="extqli-viewer">
+          <RegistryValue
+            Type="string"
+            Value="URL:eXT.Qli Native Viewer Protocol" />
+
+          <RegistryValue
+            Name="URL Protocol"
+            Type="string"
+            Value="" />
+        </RegistryKey>
+
+        <RegistryKey Root="HKCR" Key="extqli-viewer\DefaultIcon">
+          <RegistryValue
+            Type="string"
+            Value="[INSTALLFOLDER]extqli_viewer_protocol_launcher.exe,0" />
+        </RegistryKey>
+
+        <RegistryKey Root="HKCR" Key="extqli-viewer\shell\open\command">
+          <RegistryValue
+            Type="string"
+            Value="&quot;[INSTALLFOLDER]extqli_viewer_protocol_launcher.exe&quot; &quot;%1&quot;" />
+        </RegistryKey>
+
+        <RegistryValue
+          Root="HKCU"
+          Key="Software\Qliphoth\eXT.QliNativeViewer"
+          Name="Installed"
+          Type="integer"
+          Value="1"
+          KeyPath="yes" />
+
+      </Component>
+
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="ShortcutComponents" Directory="ApplicationProgramsFolder">
+
+      <Component Id="StartMenuShortcutComponent" Guid="F90A50F6-B6B2-47C3-A040-6F7C2A50C900">
+
+        <Shortcut
+          Id="ApplicationStartMenuShortcut"
+          Name="eXT.Qli Native Viewer"
+          Description="eXT.Qli Native Viewer"
+          Target="[INSTALLFOLDER]extqli_native_viewer.exe"
+          WorkingDirectory="INSTALLFOLDER" />
+
+        <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
+
+        <RegistryValue
+          Root="HKCU"
+          Key="Software\Qliphoth\eXT.QliNativeViewer"
+          Name="StartMenuShortcut"
+          Type="integer"
+          Value="1"
+          KeyPath="yes" />
+
+      </Component>
+
+    </ComponentGroup>
+  </Fragment>
+
+</Wix>

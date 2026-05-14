@@ -1,0 +1,7 @@
+requests
+aiortc
+av
+opencv-python
+pynput
+numpy
+pyinstaller

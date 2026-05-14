@@ -29,11 +29,11 @@ if (is_file($configFile)) {
     <script src="https://unpkg.com/@knadh/oat/oat.min.js" defer></script>
 
     <link rel="stylesheet" href="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/css/app.css?v=base-8">
-    <link rel="stylesheet" href="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/css/elements/cards.css?v=cards-9">
+    <link rel="stylesheet" href="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/css/elements/cards.css?v=cards-10">
     <link rel="stylesheet" href="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/css/elements/animations.css?v=animations-7">
     <link rel="stylesheet" href="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/css/elements/remote-status.css?v=remote-status-3">
     <link rel="stylesheet" href="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/css/elements/system-config.css?v=system-config-5">
-    <link rel="stylesheet" href="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/css/elements/viewer-controls.css?v=viewer-controls-1">
+    <link rel="stylesheet" href="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/css/elements/viewer-controls.css?v=viewer-controls-4">
 
     <script>
         window.EXTQLI_API_BASE_PATH = <?= json_encode($apiBase, JSON_UNESCAPED_SLASHES) ?>;
@@ -54,9 +54,10 @@ if (is_file($configFile)) {
 
     <?php require __DIR__ . '/frontend/views/dashboard.php'; ?>
 
-    <script type="module" src="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/js/main.js?v=main-9"></script>
+    <script type="module" src="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/js/main.js?v=main-10"></script>
     <script src="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/js/endpoint-cards.js?v=endpoint-cards-8" defer></script>
     <script src="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/js/modules/animations.js?v=animations-7" defer></script>
     <script src="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/js/modules/remote-status-ui.js?v=remote-status-3" defer></script>
+    <script src="<?= htmlspecialchars($pageBase, ENT_QUOTES, 'UTF-8') ?>/assets/js/modules/native-viewer-launcher.js?v=native-viewer-5" defer></script>
 </body>
 </html>

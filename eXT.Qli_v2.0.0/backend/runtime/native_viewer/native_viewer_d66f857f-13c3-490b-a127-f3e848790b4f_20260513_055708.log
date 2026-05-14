@@ -1,0 +1,13 @@
+[2026-05-13 05:57:09,603] [INFO] TURN allocation created ('10.201.0.254', 60076) (expires in 600 seconds)
+[2026-05-13 05:57:09,604] [INFO] TURN allocation created ('10.201.0.254', 59627) (expires in 600 seconds)
+[2026-05-13 05:57:09,630] [INFO] Offer submitted.
+[2026-05-13 05:57:18,382] [INFO] TURN allocation deleted ('10.201.0.254', 60076)
+[2026-05-13 05:57:18,394] [INFO] Track received: video
+[2026-05-13 05:57:18,394] [INFO] Answer received and applied.
+[2026-05-13 05:57:18,398] [INFO] pynput not available. Keyboard input disabled.
+qt.qpa.xcb: could not connect to display 
+qt.qpa.plugin: Could not load the Qt platform plugin "xcb" in "/var/www/html/eXT.Qli_preprod/native_viewer/venv/lib/python3.12/site-packages/cv2/qt/plugins" even though it was found.
+This application failed to start because no Qt platform plugin could be initialized. Reinstalling the application may fix this problem.
+
+Available platform plugins are: xcb.
+

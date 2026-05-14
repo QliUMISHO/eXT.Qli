@@ -1,194 +1,329 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/_bootstrap.php';
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
-function ensure_extqli_agents_table(PDO $pdo): void
+date_default_timezone_set('Asia/Manila');
+
+function json_ok(array $extra = []): void
 {
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS extqli_agents (
-            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-            agent_uuid VARCHAR(128) NOT NULL,
-            agent_token VARCHAR(128) NULL,
-            hostname VARCHAR(190) NULL,
-            username VARCHAR(190) NULL,
-            os_name VARCHAR(80) NULL,
-            os_version VARCHAR(255) NULL,
-            architecture VARCHAR(80) NULL,
-            local_ip VARCHAR(80) NULL,
-            mac_address VARCHAR(80) NULL,
-            cpu_info VARCHAR(255) NULL,
-            ram_mb INT NULL DEFAULT 0,
-            disk_total_gb DECIMAL(12,2) NULL DEFAULT 0,
-            disk_free_gb DECIMAL(12,2) NULL DEFAULT 0,
-            uptime_seconds BIGINT NULL DEFAULT 0,
-            wazuh_status VARCHAR(80) NULL,
-            screen_width INT NULL DEFAULT 0,
-            screen_height INT NULL DEFAULT 0,
-            last_seen DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            PRIMARY KEY (id),
-            UNIQUE KEY uq_extqli_agents_uuid (agent_uuid),
-            KEY idx_extqli_agents_last_seen (last_seen),
-            KEY idx_extqli_agents_local_ip (local_ip)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ");
+    echo json_encode(['success' => true] + $extra, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    exit;
 }
 
-function table_exists(PDO $pdo, string $table): bool
+function json_fail(string $message, int $status = 500, array $extra = []): void
 {
-    $stmt = $pdo->prepare("
-        SELECT COUNT(*)
-        FROM INFORMATION_SCHEMA.TABLES
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = :table
-    ");
-    $stmt->execute([':table' => $table]);
-
-    return (int)$stmt->fetchColumn() > 0;
+    http_response_code($status);
+    echo json_encode(['success' => false, 'message' => $message] + $extra, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    exit;
 }
 
-function column_exists(PDO $pdo, string $table, string $column): bool
+function find_config_file(): ?string
 {
-    $stmt = $pdo->prepare("
-        SELECT COUNT(*)
-        FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = :table
-          AND COLUMN_NAME = :column
-    ");
-    $stmt->execute([
-        ':table' => $table,
-        ':column' => $column,
-    ]);
+    $candidates = [
+        __DIR__ . '/_bootstrap.php',
+        dirname(__DIR__) . '/_bootstrap.php',
+        dirname(__DIR__) . '/config.php',
+        dirname(__DIR__, 2) . '/config.php',
+        dirname(__DIR__, 3) . '/config.php',
+        __DIR__ . '/../config.php',
+    ];
 
-    return (int)$stmt->fetchColumn() > 0;
-}
-
-function normalize_agent_row(array $row): array
-{
-    foreach ($row as $key => $value) {
-        if ($value === null) {
-            $row[$key] = '';
+    foreach ($candidates as $file) {
+        if (is_file($file)) {
+            return $file;
         }
     }
 
-    $username = trim((string)($row['username'] ?? ''));
+    return null;
+}
 
-    $row['logged_in_username'] = $username;
-    $row['current_user'] = $username;
-    $row['display_name'] = $username;
-    $row['endpoint_username_output'] = $username;
-    $row['username_stdout'] = $username;
-    $row['username_probe_output'] = $username;
+function db(): mysqli
+{
+    $configFile = find_config_file();
 
-    $row['is_online'] = (bool)((int)($row['is_online'] ?? 0));
-    $row['ram_mb'] = (int)($row['ram_mb'] ?? 0);
-    $row['uptime_seconds'] = (int)($row['uptime_seconds'] ?? 0);
-    $row['screen_width'] = (int)($row['screen_width'] ?? 0);
-    $row['screen_height'] = (int)($row['screen_height'] ?? 0);
-    $row['disk_total_gb'] = (float)($row['disk_total_gb'] ?? 0);
-    $row['disk_free_gb'] = (float)($row['disk_free_gb'] ?? 0);
+    if ($configFile) {
+        require_once $configFile;
+    }
 
-    return $row;
+    if (isset($GLOBALS['conn']) && $GLOBALS['conn'] instanceof mysqli) {
+        $mysqli = $GLOBALS['conn'];
+    } elseif (isset($GLOBALS['mysqli']) && $GLOBALS['mysqli'] instanceof mysqli) {
+        $mysqli = $GLOBALS['mysqli'];
+    } elseif (isset($GLOBALS['db']) && $GLOBALS['db'] instanceof mysqli) {
+        $mysqli = $GLOBALS['db'];
+    } elseif (isset($conn) && $conn instanceof mysqli) {
+        $mysqli = $conn;
+    } elseif (isset($mysqli) && $mysqli instanceof mysqli) {
+        $mysqli = $mysqli;
+    } elseif (isset($db) && $db instanceof mysqli) {
+        $mysqli = $db;
+    } else {
+        $host = defined('DB_HOST') ? DB_HOST : (defined('DB_SERVER') ? DB_SERVER : '127.0.0.1');
+        $user = defined('DB_USER') ? DB_USER : (defined('DB_USERNAME') ? DB_USERNAME : 'root');
+        $pass = defined('DB_PASS') ? DB_PASS : (defined('DB_PASSWORD') ? DB_PASSWORD : '');
+        $name = defined('DB_NAME') ? DB_NAME : (defined('DB_DATABASE') ? DB_DATABASE : '');
+
+        if ($name === '') {
+            json_fail('Database name is not configured. Check config.php or _bootstrap.php.');
+        }
+
+        $mysqli = @new mysqli((string)$host, (string)$user, (string)$pass, (string)$name);
+    }
+
+    if ($mysqli->connect_errno) {
+        json_fail('Database connection failed: ' . $mysqli->connect_error);
+    }
+
+    $mysqli->set_charset('utf8mb4');
+
+    return $mysqli;
+}
+
+function table_exists(mysqli $db, string $table): bool
+{
+    $sql = "
+        SELECT COUNT(*) AS total
+        FROM INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = ?
+    ";
+
+    $stmt = $db->prepare($sql);
+
+    if (!$stmt) {
+        json_fail('Table check prepare failed: ' . $db->error);
+    }
+
+    $stmt->bind_param('s', $table);
+    $stmt->execute();
+
+    $res = $stmt->get_result();
+    $row = $res ? $res->fetch_assoc() : null;
+
+    $stmt->close();
+
+    return (int)($row['total'] ?? 0) > 0;
+}
+
+function column_exists(mysqli $db, string $table, string $column): bool
+{
+    $sql = "
+        SELECT COUNT(*) AS total
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = ?
+          AND COLUMN_NAME = ?
+    ";
+
+    $stmt = $db->prepare($sql);
+
+    if (!$stmt) {
+        json_fail('Column check prepare failed: ' . $db->error);
+    }
+
+    $stmt->bind_param('ss', $table, $column);
+    $stmt->execute();
+
+    $res = $stmt->get_result();
+    $row = $res ? $res->fetch_assoc() : null;
+
+    $stmt->close();
+
+    return (int)($row['total'] ?? 0) > 0;
+}
+
+function add_column(mysqli $db, string $table, string $column, string $definition): void
+{
+    if (column_exists($db, $table, $column)) {
+        return;
+    }
+
+    $sql = "ALTER TABLE `$table` ADD COLUMN `$column` $definition";
+
+    if (!$db->query($sql)) {
+        json_fail("Failed to add column `$column` to `$table`: " . $db->error);
+    }
+}
+
+function ensure_tables(mysqli $db): void
+{
+    if (!table_exists($db, 'agents')) {
+        $sql = "
+            CREATE TABLE `agents` (
+                `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `agent_uuid` VARCHAR(120) NOT NULL,
+                `agent_token` VARCHAR(190) NULL,
+                `hostname` VARCHAR(190) NULL,
+                `username` VARCHAR(190) NULL,
+                `logged_in_username` VARCHAR(190) NULL,
+                `current_user` VARCHAR(190) NULL,
+                `display_name` VARCHAR(190) NULL,
+                `endpoint_username_output` VARCHAR(190) NULL,
+                `username_stdout` VARCHAR(190) NULL,
+                `username_probe_output` VARCHAR(190) NULL,
+                `local_ip` VARCHAR(80) NULL,
+                `mac_address` VARCHAR(80) NULL,
+                `os_name` VARCHAR(120) NULL,
+                `os_version` VARCHAR(120) NULL,
+                `architecture` VARCHAR(120) NULL,
+                `screen_width` INT NULL DEFAULT 0,
+                `screen_height` INT NULL DEFAULT 0,
+                `last_seen` DATETIME NULL,
+                `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `uniq_agent_uuid` (`agent_uuid`),
+                KEY `idx_last_seen` (`last_seen`),
+                KEY `idx_local_ip` (`local_ip`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ";
+
+        if (!$db->query($sql)) {
+            json_fail('Failed to create agents table: ' . $db->error);
+        }
+    }
+
+    $columns = [
+        'agent_token' => 'VARCHAR(190) NULL',
+        'hostname' => 'VARCHAR(190) NULL',
+        'username' => 'VARCHAR(190) NULL',
+        'logged_in_username' => 'VARCHAR(190) NULL',
+        'current_user' => 'VARCHAR(190) NULL',
+        'display_name' => 'VARCHAR(190) NULL',
+        'endpoint_username_output' => 'VARCHAR(190) NULL',
+        'username_stdout' => 'VARCHAR(190) NULL',
+        'username_probe_output' => 'VARCHAR(190) NULL',
+        'local_ip' => 'VARCHAR(80) NULL',
+        'mac_address' => 'VARCHAR(80) NULL',
+        'os_name' => 'VARCHAR(120) NULL',
+        'os_version' => 'VARCHAR(120) NULL',
+        'architecture' => 'VARCHAR(120) NULL',
+        'screen_width' => 'INT NULL DEFAULT 0',
+        'screen_height' => 'INT NULL DEFAULT 0',
+        'last_seen' => 'DATETIME NULL',
+        'created_at' => 'DATETIME NULL DEFAULT CURRENT_TIMESTAMP',
+        'updated_at' => 'DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+    ];
+
+    foreach ($columns as $column => $definition) {
+        add_column($db, 'agents', $column, $definition);
+    }
+
+    if (!column_exists($db, 'agents', 'agent_uuid')) {
+        json_fail('agents table exists but has no agent_uuid column.');
+    }
+}
+
+function online_from_last_seen(?string $lastSeen, int $ttlSeconds): bool
+{
+    if (!$lastSeen) {
+        return false;
+    }
+
+    $ts = strtotime($lastSeen);
+
+    if (!$ts) {
+        return false;
+    }
+
+    return (time() - $ts) <= $ttlSeconds;
 }
 
 try {
-    $pdo = Database::connect();
-    ensure_extqli_agents_table($pdo);
+    $db = db();
+    ensure_tables($db);
 
-    $sourceTable = 'extqli_agents';
-
-    if (table_exists($pdo, 'agents') && !table_exists($pdo, 'extqli_agents')) {
-        $sourceTable = 'agents';
-    }
-
-    if (table_exists($pdo, 'agents')) {
-        $sourceTable = 'agents';
-    }
-
-    $hasStatus = column_exists($pdo, $sourceTable, 'status');
-    $hasApproved = column_exists($pdo, $sourceTable, 'approved');
-    $hasScreenWidth = column_exists($pdo, $sourceTable, 'screen_width');
-    $hasScreenHeight = column_exists($pdo, $sourceTable, 'screen_height');
-    $hasCreatedAt = column_exists($pdo, $sourceTable, 'created_at');
-    $hasUpdatedAt = column_exists($pdo, $sourceTable, 'updated_at');
-
-    $screenWidthSql = $hasScreenWidth ? "screen_width" : "0 AS screen_width";
-    $screenHeightSql = $hasScreenHeight ? "screen_height" : "0 AS screen_height";
-    $createdAtSql = $hasCreatedAt ? "created_at" : "last_seen AS created_at";
-    $updatedAtSql = $hasUpdatedAt ? "updated_at" : "last_seen AS updated_at";
-
-    $onlineSql = $hasStatus
-        ? "CASE WHEN status = 'online' OR last_seen >= (NOW() - INTERVAL 90 SECOND) THEN 1 ELSE 0 END AS is_online"
-        : "CASE WHEN last_seen >= (NOW() - INTERVAL 90 SECOND) THEN 1 ELSE 0 END AS is_online";
-
-    $approvedWhere = $hasApproved ? "WHERE approved = 1" : "";
+    $ttlSeconds = isset($_GET['ttl']) ? max(15, min(3600, (int)$_GET['ttl'])) : 180;
+    $onlineOnly = isset($_GET['online_only']) ? filter_var($_GET['online_only'], FILTER_VALIDATE_BOOL) : false;
+    $limit = isset($_GET['limit']) ? max(1, min(1000, (int)$_GET['limit'])) : 500;
 
     $sql = "
         SELECT
-            agent_uuid,
-            agent_token,
-            hostname,
-            username,
-            os_name,
-            os_version,
-            architecture,
-            local_ip,
-            mac_address,
-            cpu_info,
-            ram_mb,
-            disk_total_gb,
-            disk_free_gb,
-            uptime_seconds,
-            wazuh_status,
-            {$screenWidthSql},
-            {$screenHeightSql},
-            last_seen,
-            {$createdAtSql},
-            {$updatedAtSql},
-            {$onlineSql}
-        FROM {$sourceTable}
-        {$approvedWhere}
-        ORDER BY last_seen DESC
-        LIMIT 500
+            `agent_uuid`,
+            COALESCE(`agent_token`, '') AS `agent_token`,
+            COALESCE(`hostname`, '') AS `hostname`,
+            COALESCE(`username`, '') AS `username`,
+            COALESCE(`logged_in_username`, '') AS `logged_in_username`,
+            COALESCE(`current_user`, '') AS `current_user`,
+            COALESCE(`display_name`, '') AS `display_name`,
+            COALESCE(`endpoint_username_output`, '') AS `endpoint_username_output`,
+            COALESCE(`username_stdout`, '') AS `username_stdout`,
+            COALESCE(`username_probe_output`, '') AS `username_probe_output`,
+            COALESCE(`local_ip`, '') AS `local_ip`,
+            COALESCE(`mac_address`, '') AS `mac_address`,
+            COALESCE(`os_name`, 'Unknown') AS `os_name`,
+            COALESCE(`os_version`, '') AS `os_version`,
+            COALESCE(`architecture`, '') AS `architecture`,
+            COALESCE(`screen_width`, 0) AS `screen_width`,
+            COALESCE(`screen_height`, 0) AS `screen_height`,
+            `last_seen`,
+            `created_at`,
+            `updated_at`
+        FROM `agents`
+        WHERE `agent_uuid` IS NOT NULL
+          AND `agent_uuid` <> ''
+        ORDER BY `last_seen` DESC, `updated_at` DESC, `id` DESC
+        LIMIT ?
     ";
 
-    $stmt = $pdo->query($sql);
-    $rows = [];
+    $stmt = $db->prepare($sql);
 
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $rows[] = normalize_agent_row($row);
+    if (!$stmt) {
+        json_fail('Failed to prepare agents query: ' . $db->error);
     }
 
-    $online = 0;
+    $stmt->bind_param('i', $limit);
+    $stmt->execute();
 
-    foreach ($rows as $row) {
+    $res = $stmt->get_result();
+    $data = [];
+
+    while ($row = $res->fetch_assoc()) {
+        $row['screen_width'] = (int)($row['screen_width'] ?? 0);
+        $row['screen_height'] = (int)($row['screen_height'] ?? 0);
+        $row['is_online'] = online_from_last_seen((string)($row['last_seen'] ?? ''), $ttlSeconds);
+        $row['source'] = 'agents';
+
+        if ($onlineOnly && !$row['is_online']) {
+            continue;
+        }
+
+        $data[] = $row;
+    }
+
+    $stmt->close();
+
+    usort($data, static function (array $a, array $b): int {
+        $ao = (bool)($a['is_online'] ?? false);
+        $bo = (bool)($b['is_online'] ?? false);
+
+        if ($ao !== $bo) {
+            return $ao ? -1 : 1;
+        }
+
+        $at = strtotime((string)($a['last_seen'] ?? '')) ?: 0;
+        $bt = strtotime((string)($b['last_seen'] ?? '')) ?: 0;
+
+        return $bt <=> $at;
+    });
+
+    $onlineCount = 0;
+
+    foreach ($data as $row) {
         if (!empty($row['is_online'])) {
-            $online++;
+            $onlineCount++;
         }
     }
 
-    Response::json([
-        'success' => true,
-        'message' => 'Agents loaded.',
-        'table' => $sourceTable,
-        'count' => count($rows),
-        'online' => $online,
-        'offline' => max(count($rows) - $online, 0),
+    json_ok([
+        'data' => $data,
+        'count' => count($data),
+        'online_count' => $onlineCount,
+        'ttl_seconds' => $ttlSeconds,
         'server_time' => date('Y-m-d H:i:s'),
-        'data' => $rows
     ]);
 } catch (Throwable $e) {
-    Response::json([
-        'success' => false,
-        'message' => $e->getMessage(),
-        'table' => 'agents/extqli_agents',
-        'count' => 0,
-        'online' => 0,
-        'offline' => 0,
-        'server_time' => date('Y-m-d H:i:s'),
-        'data' => []
-    ], 500);
+    json_fail($e->getMessage(), 500);
 }
